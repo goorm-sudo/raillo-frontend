@@ -4,8 +4,12 @@ import Link from "next/link"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Train, ChevronLeft, Home, ChevronRight, Printer } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Train, Calendar, MapPin, Clock, ArrowRight, ChevronLeft, CreditCard, Users, Home, ChevronRight, Printer } from "lucide-react"
+import Header from "@/components/layout/Header"
+import Footer from "@/components/layout/Footer"
 
 export default function RegularTicketPage() {
   const router = useRouter()
@@ -97,25 +101,7 @@ export default function RegularTicketPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/" className="flex items-center space-x-2">
-                <Train className="h-8 w-8 text-blue-600" />
-                <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
-              </Link>
-            </div>
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                <ChevronLeft className="h-4 w-4" />
-                <span>홈으로</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Blue Header Section */}
       <div className="bg-blue-500 text-white py-12">
@@ -236,47 +222,7 @@ export default function RegularTicketPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8 mt-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="font-semibold mb-4">고객센터</h3>
-              <p className="text-sm text-gray-300">1544-7788</p>
-              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">빠른 링크</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    이용약관
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    개인정보처리방침
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    사이트맵
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
-              <p className="text-sm text-gray-300">
-                RAIL-O는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
-              </p>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }

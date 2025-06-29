@@ -4,16 +4,19 @@ import Link from "next/link"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
+import { Label as UILabel } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Train, ChevronLeft, ArrowRight, AlertTriangle, ChevronDown } from "lucide-react"
+import { Train, ChevronLeft, ArrowRight, AlertTriangle, ChevronDown, CreditCard, Lock, Calendar, MapPin, Clock, User } from "lucide-react"
+import Header from "@/components/layout/Header"
+import Footer from "@/components/layout/Footer"
 
 interface PaymentInfo {
   trainType: string
@@ -129,40 +132,7 @@ export default function PaymentPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/" className="flex items-center space-x-2">
-                <Train className="h-8 w-8 text-blue-600" />
-                <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
-              </Link>
-              <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
-                <Link href="/" className="hover:text-blue-600">
-                  홈
-                </Link>
-                <span>{">"}</span>
-                <Link href="/ticket/booking" className="hover:text-blue-600">
-                  승차권예매
-                </Link>
-                <span>{">"}</span>
-                <Link href="/ticket/reservation" className="hover:text-blue-600">
-                  예약완료
-                </Link>
-                <span>{">"}</span>
-                <span className="text-blue-600">결제</span>
-              </div>
-            </div>
-            <Link href="/ticket/reservation">
-              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                <ChevronLeft className="h-4 w-4" />
-                <span>돌아가기</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
@@ -354,7 +324,7 @@ export default function PaymentPage() {
                         onCheckedChange={setRequestReceipt}
                         className="data-[state=checked]:bg-blue-600"
                       />
-                      <Label htmlFor="requestReceipt">현금영수증 신청</Label>
+                      <UILabel htmlFor="requestReceipt">현금영수증 신청</UILabel>
                     </div>
 
                     {requestReceipt && (
@@ -363,11 +333,11 @@ export default function PaymentPage() {
                           <RadioGroup value={receiptType} onValueChange={setReceiptType} className="flex space-x-4">
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="personal" id="personal" />
-                              <Label htmlFor="personal">개인</Label>
+                              <UILabel htmlFor="personal">개인</UILabel>
                             </div>
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="business" id="business" />
-                              <Label htmlFor="business">사업자지출증빙</Label>
+                              <UILabel htmlFor="business">사업자지출증빙</UILabel>
                             </div>
                           </RadioGroup>
                         </div>
@@ -404,7 +374,7 @@ export default function PaymentPage() {
                   <div className="space-y-6">
                     {/* 카드종류 */}
                     <div className="space-y-3">
-                      <Label className="text-base font-medium">카드종류</Label>
+                      <UILabel className="text-base font-medium">카드종류</UILabel>
                       <div className="flex space-x-4">
                         <Button
                           variant={cardType === "personal" ? "default" : "outline"}
@@ -432,7 +402,7 @@ export default function PaymentPage() {
 
                     {/* 신용카드 번호 */}
                     <div className="space-y-3">
-                      <Label className="text-base font-medium">신용카드 번호</Label>
+                      <UILabel className="text-base font-medium">신용카드 번호</UILabel>
                       <div className="flex space-x-2">
                         <Input
                           value={cardNumber1}
@@ -466,7 +436,7 @@ export default function PaymentPage() {
 
                     {/* 유효기간 */}
                     <div className="space-y-3">
-                      <Label className="text-base font-medium">유효기간</Label>
+                      <UILabel className="text-base font-medium">유효기간</UILabel>
                       <div className="flex items-center space-x-2">
                         <Input
                           placeholder="MM"
@@ -495,7 +465,7 @@ export default function PaymentPage() {
 
                     {/* 인증번호 */}
                     <div className="space-y-3">
-                      <Label className="text-base font-medium">인증번호</Label>
+                      <UILabel className="text-base font-medium">인증번호</UILabel>
                       <div className="flex space-x-4">
                         <Input
                           placeholder="인증번호를 입력하세요."
@@ -510,7 +480,7 @@ export default function PaymentPage() {
 
                     {/* 할부개월 */}
                     <div className="space-y-3">
-                      <Label className="text-base font-medium">할부개월</Label>
+                      <UILabel className="text-base font-medium">할부개월</UILabel>
                       <Select value={installment} onValueChange={setInstallment}>
                         <SelectTrigger className="w-32">
                           <SelectValue />
@@ -527,7 +497,7 @@ export default function PaymentPage() {
 
                     {/* 신용카드 비밀번호 */}
                     <div className="space-y-3">
-                      <Label className="text-base font-medium">신용카드 비밀번호</Label>
+                      <UILabel className="text-base font-medium">신용카드 비밀번호</UILabel>
                       <div className="flex space-x-4">
                         <Input
                           value={cardPassword}
@@ -543,14 +513,14 @@ export default function PaymentPage() {
                     {/* 개인정보 수집 및 이용동의 */}
                     <div className="space-y-4 border-t pt-4">
                       <div className="flex items-center justify-between">
-                        <Label className="text-base font-medium">[필수] 개인정보 수집 및 이용동의</Label>
+                        <UILabel className="text-base font-medium">[필수] 개인정보 수집 및 이용동의</UILabel>
                         <div className="flex items-center space-x-2">
                           <Checkbox
                             id="agreePersonalInfo"
                             checked={agreePersonalInfo}
-                            onCheckedChange={setAgreePersonalInfo}
+                            onCheckedChange={(checked) => setAgreePersonalInfo(checked === true)}
                           />
-                          <Label htmlFor="agreePersonalInfo">동의함</Label>
+                          <UILabel htmlFor="agreePersonalInfo">동의함</UILabel>
                         </div>
                       </div>
 
@@ -595,16 +565,24 @@ export default function PaymentPage() {
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
-                <Checkbox id="terms" checked={agreeTerms} onCheckedChange={setAgreeTerms} />
-                <Label htmlFor="terms" className="text-sm">
+                <Checkbox 
+                  id="terms" 
+                  checked={agreeTerms} 
+                  onCheckedChange={(checked) => setAgreeTerms(checked === true)} 
+                />
+                <UILabel htmlFor="terms" className="text-sm">
                   스마트티켓 발권(RAIL-O톡 어플 이용 시 체크) <span className="text-red-500">*</span>
-                </Label>
+                </UILabel>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox id="savePayment" checked={agreeSavePayment} onCheckedChange={setAgreeSavePayment} />
-                <Label htmlFor="savePayment" className="text-sm">
+                <Checkbox 
+                  id="savePayment" 
+                  checked={agreeSavePayment} 
+                  onCheckedChange={(checked) => setAgreeSavePayment(checked === true)} 
+                />
+                <UILabel htmlFor="savePayment" className="text-sm">
                   결제수단 저장(개인정보 및 카드번호, 비밀번호 등은 저장하지 않습니다)
-                </Label>
+                </UILabel>
               </div>
             </div>
 
@@ -655,47 +633,7 @@ export default function PaymentPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8 mt-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="font-semibold mb-4">고객센터</h3>
-              <p className="text-sm text-gray-300">1544-7788</p>
-              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">빠른 링크</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    이용약관
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    개인정보처리방침
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    사이트맵
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
-              <p className="text-sm text-gray-300">
-                RAIL-O는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
-              </p>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }

@@ -1,10 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Train, Home, Printer, Download, QrCode, Clock, MapPin, User } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Train, MapPin, Clock, Calendar, User, ArrowRight, ChevronLeft, Download, Printer, Home, QrCode } from "lucide-react"
+import Header from "@/components/layout/Header"
+import Footer from "@/components/layout/Footer"
 
 export default function GuestTicketsPage() {
   // 예시 승차권 데이터
@@ -81,11 +85,7 @@ export default function GuestTicketsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-blue-600 text-white py-6">
-        <div className="container mx-auto px-4">
-          <h1 className="text-2xl font-bold text-center">비회원 승차권 확인</h1>
-        </div>
-      </div>
+      <Header />
 
       {/* Breadcrumb */}
       <div className="bg-white border-b py-3">
@@ -242,6 +242,9 @@ export default function GuestTicketsPage() {
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <Footer />
     </div>
   )
 }

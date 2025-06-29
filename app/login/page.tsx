@@ -1,12 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {useEffect, useState} from "react"
+import {Button} from "@/components/ui/button"
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
+import {Input} from "@/components/ui/input"
+import {Label} from "@/components/ui/label"
+import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +17,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Train, Eye, EyeOff, User, Lock, Apple, Mail, Phone, UserX } from "lucide-react"
+import {Apple, Eye, EyeOff, Lock, Mail, Phone, User, UserX} from "lucide-react"
+import Header from "@/components/layout/Header"
+import Footer from "@/components/layout/Footer"
 
 export default function LoginPage() {
   const [memberNumber, setMemberNumber] = useState("")
@@ -104,21 +106,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <Train className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
-            </Link>
-            <nav className="hidden md:flex items-center space-x-6">
-              <Link href="/" className="text-gray-600 hover:text-blue-600">
-                홈으로
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
@@ -458,46 +446,7 @@ export default function LoginPage() {
       </AlertDialog>
 
       {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8 mt-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="font-semibold mb-4">고객센터</h3>
-              <p className="text-sm text-gray-300">1544-7788</p>
-              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">빠른 링크</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    이용약관
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    개인정보처리방침
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    사이트맵
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
-              <p className="text-sm text-gray-300">
-                한국철도공사는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
-              </p>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }
