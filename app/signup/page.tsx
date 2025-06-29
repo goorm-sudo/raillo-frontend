@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Train, Home, Printer, Eye, EyeOff, User, Mail, Lock, Phone } from "lucide-react"
-import { signup, SignupRequest } from "@/lib/api/signup"
+import { signup } from "@/lib/api/signup"
 import { validateSignupForm, formatPhoneNumber, removePhoneNumberFormatting, SignupFormData, Agreements, ValidationErrors } from "@/lib/validation/signup"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
@@ -157,7 +157,7 @@ export default function SignupPage() {
       // 휴대폰 번호에서 하이픈 제거
       const phoneNumbersOnly = removePhoneNumberFormatting(formData.phoneNumber)
       
-      const signupData: SignupRequest = {
+      const signupData: any = {
         name: formData.name,
         phoneNumber: phoneNumbersOnly,
         password: formData.password,

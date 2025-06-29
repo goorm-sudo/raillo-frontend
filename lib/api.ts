@@ -8,13 +8,13 @@ if (!API_BASE_URL) {
     throw new Error('NEXT_PUBLIC_API_BASE_URL 환경 변수가 설정되지 않았습니다.');
 }
 
-// API 응답 타입 정의 (실제 응답 형식에 맞춤)
+// API 응답 타입 정의
 export interface ApiResponse<T = any> {
     message?: string;
     result?: T;
 }
 
-// API 에러 응답 타입
+// 서버 에러 응답 타입 정의
 export interface ApiErrorResponse {
     timestamp: string;
     errorCode: string;
@@ -22,29 +22,35 @@ export interface ApiErrorResponse {
     details: any;
 }
 
-// API 에러 타입
+// 커스텀 API 에러 클래스
 export class ApiError extends Error {
-    constructor(
-        public status: number,
-        public errorCode: string,
-        public errorMessage: string,
-        public details?: any
-    ) {
-        super(errorMessage);
+    public timestamp: string;
+    public errorCode: string;
+    public details: any;
+    public status: number;
+
+    constructor(message: string, errorCode: string, timestamp: string, details: any, status: number) {
+        super(message);
         this.name = 'ApiError';
+        this.errorCode = errorCode;
+        this.timestamp = timestamp;
+        this.details = details;
+        this.status = status;
     }
 }
 
-// 기본 헤더 설정
+// 기본 헤더 설정 (토큰 자동 포함)
 const getDefaultHeaders = (): Record<string, string> => {
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
     };
 
-    // 토큰이 있다면 Authorization 헤더 추가
-    const token = tokenManager.getToken();
-    if (token) {
-        headers.Authorization = `Bearer ${token}`;
+    // 토큰이 있고 유효하면 Authorization 헤더 추가
+    if (tokenManager.isAuthenticated()) {
+        const token = tokenManager.getToken();
+        if (token) {
+            headers.Authorization = `Bearer ${token}`;
+        }
     }
 
     return headers;
@@ -56,6 +62,7 @@ async function apiRequest<T>(
     options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const startTime = new Date();
 
     const config: RequestInit = {
         headers: getDefaultHeaders(),
@@ -65,30 +72,77 @@ async function apiRequest<T>(
     try {
         const response = await fetch(url, config);
         const data = await response.json();
+        const endTime = new Date();
+        const duration = endTime.getTime() - startTime.getTime();
 
         if (!response.ok) {
-            // 에러 응답 처리
+            // 서버 에러 응답 형식에 맞게 처리
             const errorData = data as ApiErrorResponse;
-            throw new ApiError(
-                response.status,
-                errorData.errorCode,
-                errorData.errorMessage,
-                errorData.details
-            );
+            
+            // 통합 에러 로그
+            console.error('❌ API Error:', {
+                url,
+                method: config.method || 'GET',
+                status: response.status,
+                statusText: response.statusText,
+                errorCode: errorData.errorCode,
+                errorMessage: errorData.errorMessage,
+                duration: `${duration}ms`,
+                timestamp: endTime.toISOString()
+            });
+            
+            if (errorData.errorMessage) {
+                throw new ApiError(
+                    errorData.errorMessage,
+                    errorData.errorCode || 'UNKNOWN_ERROR',
+                    errorData.timestamp || new Date().toISOString(),
+                    errorData.details || null,
+                    response.status
+                );
+            } else if (data.message) {
+                throw new ApiError(
+                    data.message,
+                    'UNKNOWN_ERROR',
+                    new Date().toISOString(),
+                    null,
+                    response.status
+                );
+            } else {
+                throw new ApiError(
+                    'API 요청에 실패했습니다.',
+                    'UNKNOWN_ERROR',
+                    new Date().toISOString(),
+                    null,
+                    response.status
+                );
+            }
         }
 
-        // 성공 응답 처리
+        // 통합 성공 로그
+        console.log('✅ API Success:', {
+            url,
+            method: config.method || 'GET',
+            status: response.status,
+            statusText: response.statusText,
+            data,
+            duration: `${duration}ms`,
+            timestamp: endTime.toISOString()
+        });
+
         return data as ApiResponse<T>;
-    } catch (error) {
-        if (error instanceof ApiError) {
-            throw error;
-        }
-
-        throw new ApiError(
-            500,
-            'NETWORK_ERROR',
-            error instanceof Error ? error.message : 'Unknown error occurred'
-        );
+    } catch (error: any) {
+        const endTime = new Date();
+        const duration = endTime.getTime() - startTime.getTime();
+        
+        // 네트워크 에러 등 기타 에러 로그
+        console.error('💥 API Network Error:', {
+            url,
+            method: config.method || 'GET',
+            error: error.message,
+            duration: `${duration}ms`,
+            timestamp: endTime.toISOString()
+        });
+        throw error;
     }
 }
 
