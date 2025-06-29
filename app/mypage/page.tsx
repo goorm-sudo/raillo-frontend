@@ -1,44 +1,36 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
+import {useEffect, useState} from "react"
+import {Button} from "@/components/ui/button"
+import {Card, CardContent} from "@/components/ui/card"
+import {Badge} from "@/components/ui/badge"
+import {Collapsible, CollapsibleContent, CollapsibleTrigger} from "@/components/ui/collapsible"
 import {
-  Train,
-  ChevronLeft,
-  ChevronDown,
-  User,
-  CreditCard,
-  Ticket,
-  ShoppingCart,
-  Settings,
-  Star,
-  Shield,
-  Smartphone,
-  Mail,
-  Lock,
   Award,
-  Heart,
-  LogOut,
-  ArrowRight,
-  Bell,
-  HelpCircle,
-  Calendar,
-  MapPin,
-  Clock,
+  ChevronDown,
+  CreditCard,
+  Lock,
+  Mail,
+  Settings,
+  Shield,
+  ShoppingCart,
+  Smartphone,
+  Star,
+  Ticket,
+  Train,
+  User,
 } from "lucide-react"
-import { tokenManager } from "@/lib/auth"
-import { useRouter } from "next/navigation"
+import {tokenManager} from "@/lib/auth"
+import {useRouter} from "next/navigation"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
+import {getMemberInfo, MemberInfo} from "@/lib/api/user"
 
 export default function MyPage() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
+  const [memberInfo, setMemberInfo] = useState<MemberInfo | null>(null)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     ticketInfo: false,
@@ -48,13 +40,25 @@ export default function MyPage() {
   })
 
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       const authenticated = tokenManager.isAuthenticated()
       setIsLoggedIn(authenticated)
       
       if (!authenticated) {
         // 로그인되지 않은 경우 로그인 페이지로 리다이렉트
         router.push('/login')
+        return
+      }
+
+      // 로그인된 경우 회원 정보 조회
+      try {
+        const info = await getMemberInfo()
+        setMemberInfo(info)
+      } catch (error) {
+        console.error('회원 정보 조회 실패:', error)
+        // 에러 발생 시에도 페이지는 표시하되, 기본값 사용
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -62,7 +66,7 @@ export default function MyPage() {
   }, [router])
 
   // 로딩 중이거나 인증 확인 중일 때
-  if (isLoggedIn === null) {
+  if (isLoggedIn === null || loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -86,6 +90,14 @@ export default function MyPage() {
       [section]: !prev[section],
     }))
   }
+
+  // 회원 정보가 없을 때 기본값 사용
+  const displayName = memberInfo?.name || "회원"
+  const displayMemberId = memberInfo?.memberId || "로딩 중..."
+  const displayEmail = memberInfo?.email || "인증 필요"
+  const displayPhone = memberInfo?.phoneNumber || "인증 필요"
+  const displayGrade = memberInfo?.memberGrade || "일반"
+  const displayMileage = memberInfo?.mileage || 0
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -112,11 +124,11 @@ export default function MyPage() {
               <CardContent className="p-4">
                 <div className="flex items-center space-x-2 mb-2">
                   <Badge variant="outline" className="text-xs">
-                    비즈니스
+                    {displayGrade}
                   </Badge>
                 </div>
-                <h3 className="font-bold text-lg">김구름 회원님</h3>
-                <p className="text-sm text-gray-600">마일리지: 0P</p>
+                <h3 className="font-bold text-lg">{displayName} 회원님</h3>
+                <p className="text-sm text-gray-600">마일리지: {displayMileage}P</p>
               </CardContent>
             </Card>
 
@@ -277,29 +289,29 @@ export default function MyPage() {
 
             <Card>
               <CardContent className="p-6">
-                <div className="space-y-6">
+                <div className="space-y-2">
                   {/* 회원명 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">회원명</div>
                     <div className="md:col-span-2">
-                      <span className="text-lg">김구름</span>
+                      <span className="text-lg">{displayName}</span>
                     </div>
                   </div>
 
                   {/* 멤버십 번호 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">멤버십 번호</div>
                     <div className="md:col-span-2">
-                      <span className="text-lg">2024051789</span>
+                      <span className="text-lg">{displayMemberId}</span>
                     </div>
                   </div>
 
                   {/* 비밀번호 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">비밀번호</div>
                     <div className="md:col-span-2">
                       <Link href="/mypage/password/verify">
-                        <Button variant="outline" size="sm" className="rounded-full">
+                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
                           <Lock className="h-4 w-4 mr-2" />
                           비밀번호 변경
                         </Button>
@@ -308,11 +320,11 @@ export default function MyPage() {
                   </div>
 
                   {/* 이메일 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">이메일</div>
                     <div className="md:col-span-2">
                       <Link href="/mypage/contact/verify">
-                        <Button variant="outline" size="sm" className="rounded-full">
+                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
                           <Mail className="h-4 w-4 mr-2" />
                           이메일 인증/변경
                         </Button>
@@ -321,11 +333,11 @@ export default function MyPage() {
                   </div>
 
                   {/* 휴대폰 번호 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">휴대폰 번호</div>
                     <div className="md:col-span-2">
                       <Link href="/mypage/contact/verify">
-                        <Button variant="outline" size="sm" className="rounded-full">
+                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
                           <Smartphone className="h-4 w-4 mr-2" />
                           휴대폰 인증/변경
                         </Button>
@@ -334,11 +346,11 @@ export default function MyPage() {
                   </div>
 
                   {/* 카카오톡 간편로그인 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">카카오톡 간편로그인</div>
                     <div className="md:col-span-2 flex items-center space-x-4">
                       <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" className="text-xs">
+                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
                           연동해제
                         </Button>
                         <span className="text-red-500 text-sm">연동</span>
@@ -347,11 +359,11 @@ export default function MyPage() {
                   </div>
 
                   {/* APPLE ID 간편로그인 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">APPLE ID 간편로그인</div>
                     <div className="md:col-span-2 flex items-center space-x-4">
                       <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" className="text-xs">
+                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
                           로그인
                         </Button>
                         <span className="text-red-500 text-sm">미연동</span>
@@ -360,24 +372,24 @@ export default function MyPage() {
                   </div>
 
                   {/* 회원등급 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">회원등급</div>
                     <div className="md:col-span-2 flex items-center space-x-2">
                       <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                        비즈니스
+                        {displayGrade}
                       </Badge>
-                      <Button variant="outline" size="sm" className="text-xs rounded-full">
+                      <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
                         혜택
                       </Button>
                     </div>
                   </div>
 
                   {/* KTX 마일리지/포인트 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
                     <div className="font-medium text-gray-700">KTX 마일리지/포인트</div>
                     <div className="md:col-span-2 flex items-center space-x-2">
-                      <span className="text-lg font-semibold text-blue-600">0</span>
-                      <Button variant="outline" size="sm" className="text-xs rounded-full">
+                      <span className="text-lg font-semibold text-blue-600">{displayMileage}</span>
+                      <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
                         <Award className="h-3 w-3 mr-1" />
                         내역보기
                       </Button>
@@ -385,10 +397,10 @@ export default function MyPage() {
                   </div>
 
                   {/* 간편현금결제 설정 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5">
                     <div className="font-medium text-gray-700">간편현금결제 설정</div>
                     <div className="md:col-span-2">
-                      <Button variant="outline" size="sm" className="rounded-full">
+                      <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
                         <Shield className="h-4 w-4 mr-2" />
                         설정
                       </Button>
