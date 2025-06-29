@@ -1,11 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Train, Home, Printer, CheckCircle, User, CreditCard, AlertCircle } from "lucide-react"
+import {useEffect, useState} from "react"
+import {useRouter, useSearchParams} from "next/navigation"
+import {Button} from "@/components/ui/button"
+import {Card, CardContent} from "@/components/ui/card"
+import {AlertCircle, CheckCircle, CreditCard, Home, Printer, Train, User} from "lucide-react"
 
 export default function SignupCompletePage() {
   const router = useRouter()
@@ -16,7 +16,7 @@ export default function SignupCompletePage() {
   useEffect(() => {
     // localStorage에서 회원번호 가져오기
     const storedMemberNo = localStorage.getItem('signupMemberNo')
-    
+
     if (!storedMemberNo) {
       setIsValidAccess(false)
       return
@@ -24,18 +24,6 @@ export default function SignupCompletePage() {
 
     setMemberNo(storedMemberNo)
     setIsValidAccess(true)
-    
-    // 페이지를 떠날 때만 localStorage에서 회원번호 제거
-    const handleBeforeUnload = () => {
-      localStorage.removeItem('signupMemberNo')
-    }
-    
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    
-    // 컴포넌트 언마운트 시에만 이벤트 리스너 제거 (회원번호는 삭제하지 않음)
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-    }
   }, [])
 
   // 로딩 중이거나 유효성 검사 중일 때

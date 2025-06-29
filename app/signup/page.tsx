@@ -169,8 +169,6 @@ export default function SignupPage() {
       // 회원번호 추출
       const memberNo = response?.memberNo || '회원번호 없음'
       
-      alert("회원가입이 완료되었습니다!")
-      
       // localStorage에 회원번호 저장
       localStorage.setItem('signupMemberNo', memberNo)
       
