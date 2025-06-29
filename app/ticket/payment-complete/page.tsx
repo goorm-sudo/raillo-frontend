@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
-import { CheckCircle, Train, Calendar, Clock, User, CreditCard, Download, Home, List } from "lucide-react"
+import {useState} from "react"
+import {useRouter, useSearchParams} from "next/navigation"
+import {Button} from "@/components/ui/button"
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card"
+import {Badge} from "@/components/ui/badge"
+import {Separator} from "@/components/ui/separator"
+import {Calendar, CheckCircle, Clock, CreditCard, Download, Home, List, Train, User} from "lucide-react"
 
 export default function PaymentCompletePage() {
   const router = useRouter()

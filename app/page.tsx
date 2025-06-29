@@ -25,8 +25,12 @@ import {
   RotateCcw,
   ChevronLeft,
   ChevronRight,
+  ArrowRight,
+  Star,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import Header from "@/components/layout/Header"
+import Footer from "@/components/layout/Footer"
 
 export default function HomePage() {
   // 임시 로그인 상태 시뮬레이션 (실제로는 인증 상태에 따라 결정)
@@ -97,76 +101,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Train className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
-            </div>
-            <nav className="hidden md:flex items-center space-x-6">
-              {isLoggedIn ? (
-                <>
-                  <Link href="/cart">
-                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                      <ShoppingCart className="h-4 w-4" />
-                      <span>장바구니</span>
-                    </Button>
-                  </Link>
-                  <Link href="/mypage">
-                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                      <User className="h-4 w-4" />
-                      <span>마이페이지</span>
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    onClick={() => setShowSidebar(true)}
-                  >
-                    <Menu className="h-4 w-4" />
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Link href="/login">
-                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                      <LogIn className="h-4 w-4" />
-                      <span>로그인</span>
-                    </Button>
-                  </Link>
-                  <Link href="/cart">
-                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                      <ShoppingCart className="h-4 w-4" />
-                      <span>장바구니</span>
-                    </Button>
-                  </Link>
-                  <Link href="/mypage">
-                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                      <User className="h-4 w-4" />
-                      <span>마이페이지</span>
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    onClick={() => setShowSidebar(true)}
-                  >
-                    <Menu className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-            </nav>
-            {/* Mobile menu button */}
-            <Button variant="ghost" size="sm" className="md:hidden">
-              <User className="h-5 w-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Sidebar Overlay */}
       {showSidebar && (
@@ -741,47 +676,7 @@ export default function HomePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8 mt-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="font-semibold mb-4">고객센터</h3>
-              <p className="text-sm text-gray-300">1544-7788</p>
-              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">빠른 링크</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    이용약관
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    개인정보처리방침
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    사이트맵
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
-              <p className="text-sm text-gray-300">
-                RAIL-O는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
-              </p>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }
