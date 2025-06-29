@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -27,6 +27,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showGuestDialog, setShowGuestDialog] = useState(false)
   const [activeTab, setActiveTab] = useState("member")
+
+  // 페이지 로드 시 localStorage에서 회원번호 가져오기
+  useEffect(() => {
+    const storedMemberNo = localStorage.getItem('signupMemberNo')
+    if (storedMemberNo) {
+      setMemberNumber(storedMemberNo)
+      // 회원번호를 가져온 후 localStorage에서 삭제
+      localStorage.removeItem('signupMemberNo')
+    }
+  }, [])
 
   const handleMemberLogin = () => {
     if (!memberNumber || !password) {
