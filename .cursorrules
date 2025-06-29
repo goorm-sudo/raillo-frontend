@@ -1,0 +1,513 @@
+# Raillo Backend 프로젝트 AI 지침
+
+## 🚫 **절대 금지 사항**
+- **H2 Database 사용 금지**: 어떤 상황에서도 H2DB 사용하지 않음
+- **인메모리 DB 사용 금지**: 모든 테스트는 MySQL 실제 DB 사용
+- **테스트용 별도 DB 금지**: 테스트도 실제 MySQL raillo_db 사용
+
+## 🗄️ **데이터베이스 환경변수 고정**
+- **MYSQL_USER**: raillo_user (고정)
+- **MYSQL_PASSWORD**: ansim1234! (고정)
+- **DB_HOST**: 192.168.1.245 (Synology NAS - 외부 서버)
+- **DB_NAME**: raillo_db
+- **MySQL ROOT 계정**: root / !@Qkr950219!@
+
+## 🔧 **MySQL 외부 서버 접속 명령어**
+```bash
+# MySQL 서버 직접 접속 (root 계정)
+mysql -h 192.168.1.245 -u root -p'!@Qkr950219!@'
+
+# raillo_user 권한 확인
+mysql -h 192.168.1.245 -u root -p'!@Qkr950219!@' -e "SELECT User, Host FROM mysql.user WHERE User = 'raillo_user';"
+
+# raillo_user 권한 부여 (필요시)
+mysql -h 192.168.1.245 -u root -p'!@Qkr950219!@' -e "GRANT ALL PRIVILEGES ON raillo_db.* TO 'raillo_user'@'192.168.1.39' IDENTIFIED BY 'ansim1234!'; FLUSH PRIVILEGES;"
+
+# 모든 IP에서 접속 허용 (필요시)
+mysql -h 192.168.1.245 -u root -p'!@Qkr950219!@' -e "GRANT ALL PRIVILEGES ON raillo_db.* TO 'raillo_user'@'%' IDENTIFIED BY 'ansim1234!'; FLUSH PRIVILEGES;"
+```
+
+## 🧪 **테스트 실행 명령어**
+
+### 사용자 전용 (Synology NAS MySQL)
+```bash
+# 환경변수 설정 후 빌드 테스트
+MYSQL_USER=raillo_user MYSQL_PASSWORD=ansim1234! DB_HOST=192.168.1.245 DB_NAME=raillo_db SPRING_PROFILES_ACTIVE=local ./gradlew clean build
+
+# 컴파일만 테스트
+./gradlew compileJava
+
+# 애플리케이션 실행 (로컬 프로파일)
+MYSQL_USER=raillo_user MYSQL_PASSWORD=ansim1234! DB_HOST=192.168.1.245 DB_NAME=raillo_db SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
+
+# Docker 컨테이너 실행 시 환경변수
+docker run -e MYSQL_USER=raillo_user -e MYSQL_PASSWORD=ansim1234! -e DB_HOST=192.168.1.245 -e DB_NAME=raillo_db -e SPRING_PROFILES_ACTIVE=local raillo-backend
+```
+
+### 다른 개발자 (로컬 MySQL)
+```bash
+# 기본값으로 실행 (localhost MySQL 필요)
+./gradlew bootRun
+
+# 환경변수로 커스터마이징
+MYSQL_USER=myuser MYSQL_PASSWORD=mypass DB_HOST=myhost ./gradlew bootRun
+```
+
+## 📋 **환경변수 매핑표**
+| application.yml 변수 | 실행 시 환경변수명 | 기본값 | 설명 |
+|---------------------|------------------|--------|------|
+| ${MYSQL_USER:root} | MYSQL_USER | root | MySQL 사용자명 |
+| ${MYSQL_PASSWORD:} | MYSQL_PASSWORD | (빈값) | MySQL 패스워드 |
+| ${DB_HOST:localhost} | DB_HOST | localhost | MySQL 서버 IP |
+| ${DB_NAME:raillo_db} | DB_NAME | raillo_db | 데이터베이스명 |
+| ${DB_PORT:3306} | DB_PORT | 3306 | MySQL 포트 |
+| ${SPRING_PROFILES_ACTIVE:dev} | SPRING_PROFILES_ACTIVE | dev | 스프링 프로파일 |
+| ${DDL_AUTO:update} | DDL_AUTO | update | Hibernate DDL 모드 |
+| ${SHOW_SQL:true} | SHOW_SQL | true | SQL 로그 출력 여부 |
+| ${REDIS_HOST:localhost} | REDIS_HOST | localhost | Redis 서버 호스트 |
+| ${REDIS_PORT:6379} | REDIS_PORT | 6379 | Redis 포트 |
+
+## 🔐 **개인 설정 파일 관리 원칙**
+
+### 기본 정책
+- **application.yml**: Git에 포함, 기본값으로 localhost MySQL 설정
+- **application-local.yml**: Git에서 제외, 개인 전용 설정 (Synology NAS)
+- **.git/info/exclude**: 개인 설정 파일들 추적 제외
+
+### 설정 파일 우선순위
+1. 환경변수 (최우선)
+2. application-{profile}.yml (프로파일별)
+3. application.yml (기본값)
+
+### Git 추적 제외 파일들
+```
+# .git/info/exclude에 포함된 개인 설정
+application-local.yml
+application-prod.yml
+application-dev.yml
+.env
+.env.local
+.env.*.local
+*.local.properties
+```
+
+### 사용 방법
+- **사용자**: `SPRING_PROFILES_ACTIVE=local` 사용
+- **다른 개발자**: 기본값 또는 환경변수로 커스터마이징
+
+##              
+seeings.json에 .git 폴더 보이게 하는 설정 추가
+깃에 푸시하거나 팀원들에게 보여주는건 나에게 꼭 확인을 다시 하도록
+깃 명령어 사용할 때는 원격과 로컬에서는 어떤 변화가 일어나는가 각 명령어 실행 시 영향받는 파일들이 어떻게 되는지 쉽고 자세하게 설명하라
+질문에서 잘 모르겠는 부분 있으면 무조건 localFile 폴더 참조하라
+
+## 🎯 프로젝트 개요
+- **프로젝트명**: Raillo Backend (기차 예약 시스템)
+- **기술 스택**: Spring Boot 3.x, Java 17, JPA, MySQL
+- **패키지 구조**: com.sudo.railo.* (DDD 기반)
+- **코딩 스타일**: 네이버 코딩 컨벤션 준수
+
+## 📋 DDD 패키지 구조 규칙
+
+### 도메인 패키지 구조
+```
+com.sudo.railo.{도메인}/
+├── application/           # 애플리케이션 계층 (유스케이스)
+│   ├── service/          # 애플리케이션 서비스
+│   ├── dto/              # 요청/응답 DTO
+│   └── event/            # 애플리케이션 이벤트
+├── domain/               # 도메인 계층 (비즈니스 로직)
+│   ├── entity/           # 도메인 엔티티
+│   ├── service/          # 도메인 서비스
+│   ├── repository/       # 리포지토리 인터페이스
+│   └── event/            # 도메인 이벤트
+├── infrastructure/       # 인프라스트럭처 계층
+│   ├── persistence/      # 데이터 저장소 (JPA 구현체)
+│   ├── external/         # 외부 API 연동
+│   └── config/           # 설정 클래스
+├── presentation/         # 프레젠테이션 계층
+│   └── controller/       # REST API 컨트롤러
+└── exception/            # 도메인별 예외
+```
+
+### 계층별 의존성 규칙
+- **Domain**: 다른 계층에 의존하지 않음 (순수 비즈니스 로직)
+- **Application**: Domain에만 의존
+- **Infrastructure**: Domain 인터페이스를 구현
+- **Presentation**: Application을 통해서만 Domain 접근
+
+## 📋 코딩 규칙 및 스타일
+
+### Java 코딩 스타일
+- 네이버 IntelliJ 포맷터 사용 (naver-intellij-formatter.xml)
+- 들여쓰기: 스페이스 4칸
+- 라인 길이: 최대 120자
+- 메서드명/변수명: camelCase
+- 클래스명: PascalCase
+- 상수: UPPER_SNAKE_CASE
+
+### 어노테이션 규칙
+- Lombok 적극 활용: @Data, @Builder, @RequiredArgsConstructor
+- JPA: @Entity, @Table, @Column 명시적 사용
+- Spring: @Service, @Repository, @RestController
+- 검증: @Valid, @NotNull, @NotBlank 등 Bean Validation 사용
+
+## 🏗️ DDD 아키텍처 원칙
+
+### 설계 원칙
+1. **도메인 중심**: 비즈니스 로직이 domain 패키지에 집중
+2. **의존성 역전**: Infrastructure가 Domain에 의존
+3. **계층 분리**: 명확한 책임과 경계
+4. **Repository 패턴**: Domain에 인터페이스, Infrastructure에 구현체
+5. **이벤트 기반**: Spring Event를 활용한 느슨한 결합
+
+### Repository 패턴 적용
+- Domain: 인터페이스 정의 (PaymentRepository)
+- Infrastructure: JPA 구현체 (JpaPaymentRepository)
+- Application: Domain 인터페이스 의존
+
+### 데이터베이스 설계
+- 테이블명: 복수형 사용 (예: Payments, Members)
+- 컬럼명: snake_case 사용
+- 기본키: {테이블명_단수}_id 형식
+- 외래키: 참조 테이블의 기본키명 그대로 사용
+- BigDecimal: 금액 관련 모든 필드
+- **reservation_id**: BIGINT 타입 (Reservation.id 참조) - VARCHAR 아님!
+- **reservationNumber**: Long 타입 (사용자용 예약번호) - 별도 필드
+
+### API 설계
+- RESTful 원칙 준수
+- 버전 관리: /api/v1/ 경로 사용
+- HTTP 상태 코드 적절히 사용
+- ResponseEntity로 명시적 응답 제어
+- @Valid로 요청 데이터 검증
+
+## 💰 Payment 모듈 특별 지침
+
+### 결제 시스템 원칙
+- 회원/비회원 통합 처리 (단일 Payment 엔티티)
+- 마일리지: 1포인트 = 1원 고정
+- 결제 계산: 30분 만료 세션 관리
+- 중복 방지: Idempotency Key 사용
+- 프로모션: JSON 스냅샷으로 보관
+
+### DDD 패턴 적용
+- **Aggregate Root**: Payment, PaymentCalculation
+- **Domain Service**: PaymentValidationService
+- **Application Service**: PaymentService, PaymentCalculationService
+- **Repository Interface**: PaymentRepository (domain)
+- **Repository Implementation**: JpaPaymentRepository (infrastructure)
+
+### 트랜잭션 관리
+- Application Service에서 트랜잭션 관리
+- Domain Service는 순수 비즈니스 로직만
+- 이벤트 발행으로 사이드 이펙트 처리
+
+## 🧪 테스트 작성 규칙
+
+### DDD 테스트 구조
+```
+src/test/java/com/sudo/railo/payment/
+├── application/          # 애플리케이션 서비스 테스트
+├── domain/              # 도메인 로직 단위 테스트
+├── infrastructure/      # 저장소, 외부 API 통합 테스트
+└── presentation/        # 컨트롤러 테스트
+```
+
+### 테스트 원칙
+- Domain: 순수 단위 테스트, Mock 없이 테스트
+- Application: Mockito로 의존성 격리
+- Infrastructure: 실제 DB 연동 테스트
+- Presentation: MockMvc 활용
+
+## 🚨 예외 처리 지침
+
+### 예외 계층
+- PaymentException: 결제 관련 최상위 예외
+- PaymentValidationException: 검증 실패
+- @RestControllerAdvice: 글로벌 예외 처리
+- 계층별 예외 변환: Infrastructure → Domain → Application
+
+## 🎯 AI 어시스턴트 지침
+
+### DDD 코드 생성 시
+- 항상 올바른 DDD 패키지 구조 사용
+- Domain 계층은 다른 계층에 의존하지 않도록 작성
+- Repository는 Domain에 인터페이스, Infrastructure에 구현체
+- Application Service는 Domain 인터페이스만 의존
+- 네이버 코딩 컨벤션 준수
+
+### 응답 스타일
+- 한국어로 응답
+- DDD 설계 의도와 계층별 책임 설명
+- 의존성 방향과 패키지 구조 고려사항 언급
+- 확장 가능한 DDD 구조 우선 제안
+
+### 패키지 import 규칙
+- Domain → 다른 계층 import 금지
+- Application → Domain만 import
+- Infrastructure → Domain 인터페이스 import
+- Presentation → Application만 import
+
+# 🌐 **Raillo Frontend 프로젝트 AI 지침**
+
+## 🖥️ **프론트엔드 기술 스택**
+- **Framework**: Next.js 15.x (App Router)
+- **Language**: TypeScript
+- **UI Library**: shadcn/ui + Tailwind CSS
+- **HTTP Client**: Axios
+- **State Management**: React useState/useEffect
+- **Package Manager**: npm (pnpm-lock.yaml 있지만 npm 사용)
+
+## ⚙️ **프론트엔드 실행 명령어**
+
+### 개발 서버 실행
+```bash
+# 프론트엔드만 실행
+npm run dev  # localhost:3000
+
+# 캐시 정리 후 재실행 (Hot Reload 문제 해결)
+rm -rf .next node_modules/.cache && npm run dev
+
+# 통합 개발 환경 (백엔드 + 프론트엔드)
+cd .. && ./start-dev.sh
+```
+
+### 빌드 및 배포
+```bash
+# 프로덕션 빌드
+npm run build
+
+# 빌드 결과물 실행
+npm start
+
+# 타입 체크
+npx tsc --noEmit
+```
+
+## 🚫 **프론트엔드 절대 금지 사항**
+- **jQuery 사용 금지**: React 생태계만 사용
+- **인라인 스타일 금지**: Tailwind CSS 클래스 사용
+- **console.log 남용 금지**: 개발 중에만 사용, 배포 전 제거
+
+## 🔧 **API 통신 규칙**
+
+### HTTP 클라이언트 설정
+```typescript
+// lib/api/client.ts - Axios 기반 클라이언트 사용
+const apiClient = axios.create({
+  baseURL: 'http://localhost:8080',
+  timeout: 10000,
+});
+
+// 토큰 자동 추가, 에러 처리, 로깅 포함
+// ✅ axios 사용 (편리한 기능 많음)
+```
+
+### API 엔드포인트 매핑
+| 기능 | 프론트엔드 경로 | 백엔드 API |
+|------|---------------|------------|
+| 티켓 검색 | `/ticket/search` | `GET /api/v1/trains/search` |
+| 티켓 예약 | `/ticket/reservation` | `POST /api/v1/reservations` |
+| 결제 페이지 | `/ticket/payment` | `POST /api/v1/payments/pg/request` |
+| 결제 성공 | `/ticket/payment/success` | `POST /api/v1/payments/pg/approve` |
+| 결제 실패 | `/ticket/payment/fail` | - |
+
+## 📱 **UI/UX 규칙**
+
+### 컴포넌트 구조
+```typescript
+// shadcn/ui 컴포넌트 사용
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+
+// 커스텀 컴포넌트는 components/ 폴더에 추가
+```
+
+### 스타일링 원칙
+- **Tailwind CSS**: 모든 스타일링은 Tailwind 클래스 사용
+- **반응형 디자인**: `sm:`, `md:`, `lg:` 브레이크포인트 활용
+- **다크모드 지원**: `dark:` 클래스 사용 가능
+- **접근성**: ARIA 속성과 시맨틱 HTML 준수
+
+### 라우팅 구조 (App Router)
+```
+app/
+├── page.tsx                    # 홈페이지 (메인 검색)
+├── layout.tsx                  # 글로벌 레이아웃
+├── loading.tsx                 # 로딩 페이지
+├── ticket/
+│   ├── search/                 # 티켓 검색 결과
+│   ├── reservation/            # 티켓 예약
+│   ├── payment/                # 결제 페이지
+│   │   ├── success/            # 결제 성공 콜백
+│   │   └── fail/               # 결제 실패 콜백
+│   └── payment-complete/       # 결제 완료 페이지
+├── login/                      # 로그인
+├── signup/                     # 회원가입
+└── mypage/                     # 마이페이지
+```
+
+## 🔄 **상태 관리 및 데이터 플로우**
+
+### React 상태 관리
+```typescript
+// 지역 상태: useState 사용
+const [loading, setLoading] = useState(false);
+const [data, setData] = useState(null);
+
+// 서버 상태: useEffect + fetch 조합
+useEffect(() => {
+  fetchData();
+}, [dependency]);
+```
+
+### 폼 처리
+```typescript
+// 제어 컴포넌트 패턴 사용
+const [formData, setFormData] = useState({
+  departure: '',
+  arrival: '',
+  date: ''
+});
+
+// shadcn/ui Form 컴포넌트 활용
+import { useForm } from "react-hook-form"
+```
+
+## 🎨 **카카오페이 결제 연동**
+
+### 결제 플로우
+1. **결제 요청**: `/ticket/payment` → 백엔드 API 호출
+2. **카카오페이 리다이렉트**: 백엔드에서 반환된 URL로 이동
+3. **콜백 처리**: `/ticket/payment/success` 또는 `/ticket/payment/fail`
+4. **결제 완료**: `/ticket/payment-complete` 페이지 표시
+
+### 결제 데이터 구조
+```typescript
+interface PaymentRequest {
+  merchantOrderId: string;     // 예약번호
+  amount: number;             // 결제 금액
+  paymentMethod: "KAKAO_PAY"; // 결제 방법
+  productName: string;        // 상품명 (예: "KTX 101 (서울→부산)")
+  buyerName: string;          // 구매자명
+  buyerEmail: string;         // 구매자 이메일
+  buyerPhone: string;         // 구매자 전화번호
+  successUrl: string;         // 성공 콜백 URL
+  failUrl: string;           // 실패 콜백 URL
+  cancelUrl: string;         // 취소 콜백 URL
+}
+```
+
+## 🛠️ **개발 환경 및 디버깅**
+
+### Hot Reload 문제 해결
+```bash
+# Next.js 캐시 문제 해결
+rm -rf .next node_modules/.cache
+
+# 환경 문제 시 완전 재시작
+pkill -f "next dev"
+npm run dev
+```
+
+### 에러 처리 패턴
+```typescript
+// API 에러 처리
+try {
+  const response = await apiClient.post('/api/endpoint', data);
+  setSuccess(true);
+} catch (error) {
+  console.error('API 에러:', error);
+  setError(error.message);
+}
+
+// 로딩 상태 관리
+const [loading, setLoading] = useState(false);
+const handleSubmit = async () => {
+  setLoading(true);
+  try {
+    await apiCall();
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+### 환경변수 관리
+```bash
+# .env.local 파일 사용 (Git 제외)
+NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_KAKAO_PAY_URL=...
+```
+
+## 📋 **코딩 규칙 및 컨벤션**
+
+### TypeScript 규칙
+- **엄격 모드**: strict: true 설정
+- **타입 정의**: interface 우선, type은 Union 타입에만 사용
+- **null 안정성**: optional chaining (?.) 활용
+- **any 타입 금지**: unknown 또는 구체적 타입 사용
+
+### 컴포넌트 작성 규칙
+```typescript
+// 함수형 컴포넌트 + TypeScript
+interface Props {
+  title: string;
+  onSubmit: (data: FormData) => void;
+}
+
+export default function MyComponent({ title, onSubmit }: Props) {
+  return (
+    <div className="p-4">
+      <h1 className="text-2xl font-bold">{title}</h1>
+    </div>
+  );
+}
+```
+
+### 파일 명명 규칙
+- **컴포넌트**: PascalCase (예: `UserProfile.tsx`)
+- **페이지**: kebab-case (예: `payment-complete/page.tsx`)
+- **유틸리티**: camelCase (예: `formatDate.ts`)
+- **타입 정의**: PascalCase (예: `PaymentTypes.ts`)
+
+## 🚀 **성능 최적화**
+
+### Next.js 최적화
+- **이미지**: next/image 컴포넌트 사용
+- **폰트**: next/font 사용
+- **번들 분석**: `npm run build` 후 번들 크기 확인
+- **코드 분할**: dynamic import 활용
+
+### 렌더링 최적화
+- **메모이제이션**: React.memo, useMemo, useCallback 활용
+- **조건부 렌더링**: 불필요한 재렌더링 방지
+- **키 사용**: 리스트 렌더링 시 고유한 key 사용
+
+## 🎯 **AI 어시스턴트 프론트엔드 지침**
+
+### 코드 생성 시 원칙
+- **shadcn/ui 우선**: 기본 UI 컴포넌트는 shadcn/ui 사용
+- **Tailwind CSS**: 모든 스타일링은 Tailwind 클래스
+- **TypeScript 필수**: 모든 컴포넌트와 함수에 타입 정의
+- **Axios**: HTTP 통신은 axios 사용
+- **App Router**: 새로운 페이지는 app/ 폴더 구조 준수
+
+### 응답 스타일
+- **한국어 응답**: 설명과 주석은 한국어 사용
+- **실행 가능한 코드**: 바로 복사해서 사용할 수 있는 완전한 코드 제공
+- **모던 패턴**: 최신 React/Next.js 패턴 활용
+- **접근성 고려**: ARIA 속성과 시맨틱 마크업 포함
+
+### 문제 해결 우선순위
+1. **캐시 정리**: .next 폴더 삭제 후 재시작
+2. **타입 에러**: TypeScript 컴파일 에러 우선 해결
+3. **API 연동**: axios 기반 통신 에러 디버깅
+4. **UI 버그**: shadcn/ui 컴포넌트 활용으로 해결
+
+---
+
+**마지막 업데이트**: 2025-06-26 (프론트엔드 지침 추가, Axios 사용으로 변경)
+**프로젝트 단계**: Frontend + Backend 통합 개발환경 구축 완료 

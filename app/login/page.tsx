@@ -18,8 +18,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Train, Eye, EyeOff, User, Lock, Apple, Mail, Phone, UserX } from "lucide-react"
+import { useRouter } from "next/navigation"
+import apiClient from "@/lib/api/client"
 
 export default function LoginPage() {
+  const router = useRouter()
   const [memberNumber, setMemberNumber] = useState("")
   const [email, setEmail] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
@@ -27,68 +30,152 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showGuestDialog, setShowGuestDialog] = useState(false)
   const [activeTab, setActiveTab] = useState("member")
+  const [loading, setLoading] = useState(false)
 
-  const handleMemberLogin = () => {
+  const handleMemberLogin = async () => {
+    console.log("회원번호 로그인 시도:", memberNumber, password)
+    
     if (!memberNumber || !password) {
       alert("회원번호와 비밀번호를 모두 입력해주세요.")
       return
     }
 
-    console.log("회원번호 로그인 시도:", {
-      memberNumber,
-      password,
-    })
+    setLoading(true)
+    try {
+      console.log("API 요청 전 - 회원번호:", memberNumber)
+      const response = await apiClient.post("/auth/login", {
+        memberNo: memberNumber,
+        password: password,
+      })
 
-    alert(`회원번호 ${memberNumber}로 로그인을 시도합니다.`)
+      console.log("로그인 응답:", response.data)
+
+      if (response.data.result) {
+        const { accessToken, refreshToken } = response.data.result
+        
+        // 토큰을 localStorage에 저장
+        localStorage.setItem("accessToken", accessToken)
+        localStorage.setItem("refreshToken", refreshToken)
+        
+        console.log("로그인 성공! 홈으로 이동합니다.")
+        router.push("/") // 홈으로 이동
+      }
+    } catch (error: any) {
+      console.error("로그인 실패:", error)
+      if (error.response?.data?.message) {
+        alert(`로그인 실패: ${error.response.data.message}`)
+      } else {
+        alert("로그인에 실패했습니다. 회원번호와 비밀번호를 확인해주세요.")
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleEmailLogin = () => {
+  const handleEmailLogin = async () => {
+    console.log("이메일 로그인 시도:", email, password)
+    
     if (!email || !password) {
       alert("이메일과 비밀번호를 모두 입력해주세요.")
       return
     }
 
-    console.log("이메일 로그인 시도:", {
-      email,
-      password,
-    })
+    setLoading(true)
+    try {
+      console.log("API 요청 전 - 이메일:", email)
+      const response = await apiClient.post("/auth/login/email", {
+        email: email,
+        password: password,
+      })
 
-    alert(`이메일 ${email}로 로그인을 시도합니다.`)
+      console.log("로그인 응답:", response.data)
+
+      if (response.data.result) {
+        const { accessToken, refreshToken } = response.data.result
+        
+        // 토큰을 localStorage에 저장
+        localStorage.setItem("accessToken", accessToken)
+        localStorage.setItem("refreshToken", refreshToken)
+        
+        console.log("로그인 성공! 홈으로 이동합니다.")
+        router.push("/") // 홈으로 이동
+      }
+    } catch (error: any) {
+      console.error("로그인 실패:", error)
+      if (error.response?.data?.message) {
+        alert(`로그인 실패: ${error.response.data.message}`)
+      } else {
+        alert("로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.")
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handlePhoneLogin = () => {
+  const handlePhoneLogin = async () => {
+    console.log("휴대폰 로그인 시도:", phoneNumber, password)
+    
     if (!phoneNumber || !password) {
       alert("휴대폰 번호와 비밀번호를 모두 입력해주세요.")
       return
     }
 
-    console.log("휴대폰 로그인 시도:", {
-      phoneNumber,
-      password,
-    })
+    // 휴대폰 번호에서 하이픈 제거
+    const cleanPhoneNumber = phoneNumber.replace(/[^0-9]/g, "")
+    console.log("정리된 휴대폰 번호:", cleanPhoneNumber)
 
-    alert(`휴대폰 번호 ${phoneNumber}로 로그인을 시도합니다.`)
+    setLoading(true)
+    try {
+      console.log("API 요청 전 - 휴대폰:", cleanPhoneNumber)
+      const response = await apiClient.post("/auth/login/phone", {
+        phoneNumber: cleanPhoneNumber,
+        password: password,
+      })
+
+      console.log("로그인 응답:", response.data)
+
+      if (response.data.result) {
+        const { accessToken, refreshToken } = response.data.result
+        
+        // 토큰을 localStorage에 저장
+        localStorage.setItem("accessToken", accessToken)
+        localStorage.setItem("refreshToken", refreshToken)
+        
+        console.log("로그인 성공! 홈으로 이동합니다.")
+        router.push("/") // 홈으로 이동
+      }
+    } catch (error: any) {
+      console.error("로그인 실패:", error)
+      if (error.response?.data?.message) {
+        alert(`로그인 실패: ${error.response.data.message}`)
+      } else {
+        alert("로그인에 실패했습니다. 휴대폰 번호와 비밀번호를 확인해주세요.")
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleGuestBookingClick = () => {
+    console.log("비회원 예매 클릭")
     setShowGuestDialog(true)
   }
 
   const handleGuestBookingConfirm = () => {
     console.log("비회원 예매 이동")
     setShowGuestDialog(false)
-    // 비회원 예매 페이지로 이동하는 대신 승차권 예매 페이지로 이동하되 guest 파라미터 추가
-    window.location.href = "/ticket/booking?guest=true"
+    // 비회원 예매 페이지로 이동하되 guest 파라미터 추가
+    router.push("/ticket/booking?guest=true")
   }
 
   const handleKakaoLogin = () => {
     console.log("카카오 로그인 시도")
-    alert("카카오 로그인을 시도합니다.")
+    alert("카카오 로그인은 현재 준비 중입니다.")
   }
 
   const handleAppleLogin = () => {
     console.log("애플 로그인 시도")
-    alert("애플 로그인을 시도합니다.")
+    alert("애플 로그인은 현재 준비 중입니다.")
   }
 
   return (
@@ -151,12 +238,14 @@ export default function LoginPage() {
                       <Input
                         id="memberNumber"
                         type="text"
-                        placeholder="회원번호를 입력하세요"
+                        placeholder="TEST001"
                         value={memberNumber}
                         onChange={(e) => setMemberNumber(e.target.value)}
                         className="pl-10"
+                        disabled={loading}
                       />
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 회원번호: TEST001</p>
                   </div>
 
                   <div className="space-y-2">
@@ -168,27 +257,31 @@ export default function LoginPage() {
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="비밀번호를 입력하세요"
+                        placeholder="test1234"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-10 pr-10"
+                        disabled={loading}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        disabled={loading}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 비밀번호: test1234</p>
                   </div>
 
                   <Button
                     onClick={handleMemberLogin}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
-                    로그인
+                    {loading ? "로그인 중..." : "로그인"}
                   </Button>
                 </TabsContent>
 
@@ -203,12 +296,14 @@ export default function LoginPage() {
                       <Input
                         id="email"
                         type="email"
-                        placeholder="이메일을 입력하세요"
+                        placeholder="test@raillo.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="pl-10"
+                        disabled={loading}
                       />
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 이메일: test@raillo.com</p>
                   </div>
 
                   <div className="space-y-2">
@@ -220,27 +315,31 @@ export default function LoginPage() {
                       <Input
                         id="emailPassword"
                         type={showPassword ? "text" : "password"}
-                        placeholder="비밀번호를 입력하세요"
+                        placeholder="test1234"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-10 pr-10"
+                        disabled={loading}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        disabled={loading}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 비밀번호: test1234</p>
                   </div>
 
                   <Button
                     onClick={handleEmailLogin}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
-                    로그인
+                    {loading ? "로그인 중..." : "로그인"}
                   </Button>
                 </TabsContent>
 
@@ -255,12 +354,14 @@ export default function LoginPage() {
                       <Input
                         id="phoneNumber"
                         type="tel"
-                        placeholder="휴대폰 번호를 입력하세요"
+                        placeholder="010-1234-5678"
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
                         className="pl-10"
+                        disabled={loading}
                       />
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 휴대폰: 010-1234-5678</p>
                   </div>
 
                   <div className="space-y-2">
@@ -272,27 +373,31 @@ export default function LoginPage() {
                       <Input
                         id="phonePassword"
                         type={showPassword ? "text" : "password"}
-                        placeholder="비밀번호를 입력하세요"
+                        placeholder="test1234"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-10 pr-10"
+                        disabled={loading}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        disabled={loading}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 비밀번호: test1234</p>
                   </div>
 
                   <Button
                     onClick={handlePhoneLogin}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
-                    로그인
+                    {loading ? "로그인 중..." : "로그인"}
                   </Button>
                 </TabsContent>
 
@@ -311,6 +416,7 @@ export default function LoginPage() {
                       variant="outline"
                       className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 font-semibold py-3"
                       size="lg"
+                      disabled={loading}
                     >
                       비회원 예매하기
                     </Button>
@@ -386,6 +492,7 @@ export default function LoginPage() {
                     variant="outline"
                     className="w-full bg-yellow-300 hover:bg-yellow-400 text-gray-900 border-yellow-300 font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
                     <div className="flex items-center justify-center space-x-2">
                       <div className="w-5 h-5 bg-gray-900 rounded-sm flex items-center justify-center">
@@ -401,6 +508,7 @@ export default function LoginPage() {
                     variant="outline"
                     className="w-full bg-black hover:bg-gray-800 text-white border-black font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
                     <div className="flex items-center justify-center space-x-2">
                       <Apple className="h-5 w-5" />

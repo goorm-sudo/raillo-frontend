@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +17,7 @@ import {
   User,
   ShoppingCart,
   LogIn,
+  LogOut,
   Clock,
   MapPin,
   ArrowLeftRight,
@@ -27,10 +28,21 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import apiClient from "@/lib/api/client"
+
+interface UserInfo {
+  memberNo: string
+  name: string
+  email: string
+  totalMileage: number
+}
 
 export default function HomePage() {
-  // 임시 로그인 상태 시뮬레이션 (실제로는 인증 상태에 따라 결정)
-  const isLoggedIn = false // Simplified login status
+  // 로그인 상태 및 사용자 정보
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+  const [loading, setLoading] = useState(true)
+  
   // 예매 폼 상태
   const [departureStation, setDepartureStation] = useState("")
   const [arrivalStation, setArrivalStation] = useState("")
@@ -39,7 +51,97 @@ export default function HomePage() {
   const [showSidebar, setShowSidebar] = useState(false)
   const [showDateDialog, setShowDateDialog] = useState(false)
   const [selectedTime, setSelectedTime] = useState("00시")
-  const [tempDate, setTempDate] = useState<Date | undefined>(departureDate)
+  const [tempDate, setTempDate] = useState<Date | undefined>(undefined)
+
+  // 컴포넌트 마운트 시 로그인 상태 확인
+  useEffect(() => {
+    checkLoginStatus()
+  }, [])
+
+  const checkLoginStatus = async () => {
+    try {
+      const accessToken = localStorage.getItem("accessToken")
+      
+      if (!accessToken) {
+        setIsLoggedIn(false)
+        setUserInfo(null)
+        setLoading(false)
+        return
+      }
+
+      // JWT 토큰에서 사용자 정보 추출
+      console.log("로그인 상태 확인됨:", accessToken)
+      
+      try {
+        // JWT 토큰 디코딩 (간단한 방법)
+        const tokenParts = accessToken.split('.')
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]))
+          console.log("JWT 페이로드:", payload)
+          
+          // 토큰이 만료되지 않았는지 확인
+          const currentTime = Math.floor(Date.now() / 1000)
+          if (payload.exp && payload.exp > currentTime) {
+            // 토큰이 유효하면 사용자 정보 설정
+            setUserInfo({
+              memberNo: payload.sub || "TEST001",
+              name: "테스트사용자", // 실제로는 백엔드에서 가져와야 함
+              email: "test@raillo.com",
+              totalMileage: 15000 // 임시 값
+            })
+            setIsLoggedIn(true)
+          } else {
+            // 토큰이 만료되었으면 로그아웃
+            console.log("토큰이 만료되었습니다.")
+            localStorage.removeItem("accessToken")
+            localStorage.removeItem("refreshToken")
+            setIsLoggedIn(false)
+            setUserInfo(null)
+          }
+        } else {
+          throw new Error("잘못된 토큰 형식")
+        }
+      } catch (error) {
+        console.error("JWT 토큰 파싱 에러:", error)
+        // JWT 파싱 실패 시 fallback으로 기본 사용자 정보 설정
+        const tokenParts = accessToken.split('.')
+        if (tokenParts.length === 3) {
+          try {
+            const payload = JSON.parse(atob(tokenParts[1]))
+            console.log("JWT 페이로드 (fallback):", payload)
+            setUserInfo({
+              memberNo: payload.sub || "TEST001",
+              name: "테스트사용자",
+              email: "test@raillo.com", 
+              totalMileage: 15000
+            })
+            setIsLoggedIn(true)
+          } catch (fallbackError) {
+            console.error("Fallback JWT 파싱도 실패:", fallbackError)
+            localStorage.removeItem("accessToken")
+            localStorage.removeItem("refreshToken")
+            setIsLoggedIn(false)
+            setUserInfo(null)
+          }
+        }
+      }
+    } catch (error) {
+      console.error("로그인 상태 확인 에러:", error)
+      setIsLoggedIn(false)
+      setUserInfo(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem("accessToken")
+    localStorage.removeItem("refreshToken")
+    setIsLoggedIn(false)
+    setUserInfo(null)
+    alert("로그아웃되었습니다.")
+    window.location.reload()
+  }
 
   // 주요 기차역 목록
   const stations = [
@@ -95,6 +197,25 @@ export default function HomePage() {
     setArrivalStation(temp)
   }
 
+  // 날짜 다이얼로그 열기 함수
+  const openDateDialog = () => {
+    // tempDate를 현재 선택된 날짜나 오늘 날짜로 초기화
+    setTempDate(departureDate || new Date())
+    setShowDateDialog(true)
+  }
+
+  // 로딩 중일 때
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <Train className="h-12 w-12 text-blue-600 mx-auto mb-4 animate-pulse" />
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
@@ -108,6 +229,11 @@ export default function HomePage() {
             <nav className="hidden md:flex items-center space-x-6">
               {isLoggedIn ? (
                 <>
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <User className="h-4 w-4" />
+                    <span>{userInfo?.name}님</span>
+                    <span className="text-blue-600">({userInfo?.totalMileage?.toLocaleString()}P)</span>
+                  </div>
                   <Link href="/cart">
                     <Button variant="ghost" size="sm" className="flex items-center space-x-2">
                       <ShoppingCart className="h-4 w-4" />
@@ -120,6 +246,15 @@ export default function HomePage() {
                       <span>마이페이지</span>
                     </Button>
                   </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>로그아웃</span>
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -319,7 +454,7 @@ export default function HomePage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start text-left font-normal bg-white text-gray-900 hover:bg-gray-50"
-                  onClick={() => setShowDateDialog(true)}
+                  onClick={openDateDialog}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {departureDate ? format(departureDate, "MM/dd", { locale: ko }) : "날짜 선택"}
@@ -655,7 +790,8 @@ export default function HomePage() {
                           key={i}
                           onClick={() => {
                             if (!isPast && isCurrentMonth) {
-                              setTempDate(currentDate)
+                              console.log("달력 날짜 클릭됨:", currentDate)
+                              setTempDate(new Date(currentDate))
                             }
                           }}
                           disabled={isPast || !isCurrentMonth}
@@ -728,9 +864,14 @@ export default function HomePage() {
             </Button>
             <Button
               onClick={() => {
+                console.log("적용 버튼 클릭됨", { tempDate, selectedTime })
                 if (tempDate) {
+                  console.log("날짜 설정됨:", tempDate)
                   setDepartureDate(tempDate)
                   setShowDateDialog(false)
+                } else {
+                  console.log("tempDate가 설정되지 않음")
+                  alert("날짜를 선택해주세요.")
                 }
               }}
               className="flex-1 bg-blue-600 hover:bg-blue-700"

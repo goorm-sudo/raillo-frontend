@@ -1,0 +1,159 @@
+
+> my-v0-project@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+   ▲ Next.js 15.2.4
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.1.39:3001
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.4s
+ ○ Compiling / ...
+ ✓ Compiled / in 3.2s (2061 modules)
+ GET / 200 in 3900ms
+ ✓ Compiled in 761ms (993 modules)
+ ○ Compiling /mypage ...
+ ✓ Compiled /mypage in 1086ms (2075 modules)
+ GET /mypage 200 in 1235ms
+ ○ Compiling /mypage/saved-payment-methods ...
+ ✓ Compiled /mypage/saved-payment-methods in 741ms (2277 modules)
+ GET /mypage/saved-payment-methods 200 in 828ms
+ ✓ Compiled in 1543ms (1715 modules)
+ GET /mypage/saved-payment-methods 200 in 345ms
+ ○ Compiling /mypage/payment-history ...
+ ✓ Compiled /mypage/payment-history in 522ms (1717 modules)
+ GET /mypage/payment-history 200 in 618ms
+ ✓ Compiled / in 126ms (1231 modules)
+ GET / 200 in 180ms
+ ○ Compiling /ticket/search ...
+ ✓ Compiled /ticket/search in 961ms (2316 modules)
+ GET /ticket/search?departure=%EC%98%81%EB%93%B1%ED%8F%AC&arrival=%EC%88%98%EC%9B%90&date=2025-06-27&passengers=2 200 in 1277ms
+ ○ Compiling /ticket/reservation ...
+ ✓ Compiled /ticket/reservation in 530ms (2334 modules)
+ GET /ticket/reservation 200 in 619ms
+ ⨯ ./app/ticket/payment/page.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+     ,-[[36;1;4m/Users/park/SynologyDrive/ideProjects/raillo-frontend/app/ticket/payment/page.tsx[0m:554:1]
+ [2m551[0m |   }
+ [2m552[0m | 
+ [2m553[0m |   return (
+ [2m554[0m |     <div className="min-h-screen bg-gray-50">
+     : [35;1m     ^^^[0m
+ [2m555[0m |       <div className="container mx-auto px-4 py-6">
+ [2m556[0m |         {/* 헤더 */}
+ [2m557[0m |         <div className="flex items-center gap-4 mb-6">
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/ticket/payment/page.tsx
+ ○ Compiling /_not-found ...
+ ⨯ ./app/ticket/payment/page.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+     ,-[[36;1;4m/Users/park/SynologyDrive/ideProjects/raillo-frontend/app/ticket/payment/page.tsx[0m:554:1]
+ [2m551[0m |   }
+ [2m552[0m | 
+ [2m553[0m |   return (
+ [2m554[0m |     <div className="min-h-screen bg-gray-50">
+     : [35;1m     ^^^[0m
+ [2m555[0m |       <div className="container mx-auto px-4 py-6">
+ [2m556[0m |         {/* 헤더 */}
+ [2m557[0m |         <div className="flex items-center gap-4 mb-6">
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/ticket/payment/page.tsx
+ ⨯ ./app/ticket/payment/page.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+     ,-[[36;1;4m/Users/park/SynologyDrive/ideProjects/raillo-frontend/app/ticket/payment/page.tsx[0m:554:1]
+ [2m551[0m |   }
+ [2m552[0m | 
+ [2m553[0m |   return (
+ [2m554[0m |     <div className="min-h-screen bg-gray-50">
+     : [35;1m     ^^^[0m
+ [2m555[0m |       <div className="container mx-auto px-4 py-6">
+ [2m556[0m |         {/* 헤더 */}
+ [2m557[0m |         <div className="flex items-center gap-4 mb-6">
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/ticket/payment/page.tsx
+ GET /ticket/payment 500 in 4407ms
+ GET /ticket/payment 500 in 14ms
+ GET /ticket/payment 500 in 230ms
+ GET /ticket/payment 500 in 41ms
+ ✓ Compiled /_not-found in 2.5s (2672 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/f8e16c72423f9ac5.webpack.hot-update.json 404 in 2659ms
+ ⨯ ./app/ticket/payment/page.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+     ,-[[36;1;4m/Users/park/SynologyDrive/ideProjects/raillo-frontend/app/ticket/payment/page.tsx[0m:554:1]
+ [2m551[0m |   }
+ [2m552[0m | 
+ [2m553[0m |   return (
+ [2m554[0m |     <div className="min-h-screen bg-gray-50">
+     : [35;1m     ^^^[0m
+ [2m555[0m |       <div className="container mx-auto px-4 py-6">
+ [2m556[0m |         {/* 헤더 */}
+ [2m557[0m |         <div className="flex items-center gap-4 mb-6">
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/ticket/payment/page.tsx
+ GET /ticket/payment 500 in 200ms
+ ○ Compiling /ticket/payment ...
+ ⨯ ./app/ticket/payment/page.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+     ,-[[36;1;4m/Users/park/SynologyDrive/ideProjects/raillo-frontend/app/ticket/payment/page.tsx[0m:554:1]
+ [2m551[0m |   }
+ [2m552[0m | 
+ [2m553[0m |   return (
+ [2m554[0m |     <div className="min-h-screen bg-gray-50">
+     : [35;1m     ^^^[0m
+ [2m555[0m |       <div className="container mx-auto px-4 py-6">
+ [2m556[0m |         {/* 헤더 */}
+ [2m557[0m |         <div className="flex items-center gap-4 mb-6">
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/ticket/payment/page.tsx
+ GET /_next/static/webpack/f8e16c72423f9ac5.webpack.hot-update.json 500 in 1593ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /ticket/payment 500 in 22ms
+ GET /ticket/payment 500 in 15ms
+ GET / 500 in 16ms
+ ✓ Compiled /ticket/payment in 428ms (1334 modules)
+ GET / 500 in 301ms
+ ✓ Compiled in 297ms (1334 modules)
+ GET / 500 in 127ms
+ GET / 500 in 11ms
+ ✓ Compiled in 445ms (1334 modules)
+ GET / 500 in 19ms
+ GET / 500 in 14ms
+ ✓ Compiled in 583ms (1334 modules)
+ GET / 500 in 25ms
+ ✓ Compiled in 441ms (1334 modules)
+ GET / 500 in 114ms
+ ✓ Compiled in 248ms (1334 modules)
+ GET / 500 in 42ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 2.8s (2672 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/f8e16c72423f9ac5.webpack.hot-update.json 404 in 3286ms
+ GET / 200 in 530ms
