@@ -4,8 +4,9 @@ import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Train, ShoppingCart, User, LogIn, Menu, X, CreditCard, Ticket, CalendarIcon, Search, RotateCcw, ChevronRight } from "lucide-react"
+import { Train, ShoppingCart, User, LogIn, Menu, X, CreditCard, Ticket, CalendarIcon, Search, RotateCcw, ChevronRight, LogOut } from "lucide-react"
 import { tokenManager } from "@/lib/auth"
+import { logout } from "@/lib/api/auth"
 
 export default function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -16,6 +17,27 @@ export default function Header() {
   useEffect(() => {
     setIsLoggedIn(tokenManager.isAuthenticated())
   }, [])
+
+  // 로그인 상태를 실시간으로 업데이트하는 함수
+  const updateLoginStatus = () => {
+    setIsLoggedIn(tokenManager.isAuthenticated())
+  }
+
+  // 로그아웃 함수
+  const handleLogout = async () => {
+    try {
+      await logout()
+      tokenManager.removeToken()
+      updateLoginStatus()
+      router.push("/")
+    } catch (error: any) {
+      console.error("로그아웃 에러:", error)
+      // 로그아웃 API 실패해도 로컬 토큰은 제거
+      tokenManager.removeToken()
+      updateLoginStatus()
+      router.push("/")
+    }
+  }
 
   // breadcrumb 생성 함수
   const getBreadcrumbs = (): Array<{ name: string; path: string }> => {
@@ -102,6 +124,15 @@ export default function Header() {
           <nav className="hidden md:flex items-center space-x-4">
             {isLoggedIn ? (
               <>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="flex items-center space-x-2"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>로그아웃</span>
+                </Button>
                 <Link href="/cart">
                   <Button variant="ghost" size="sm" className="flex items-center space-x-2">
                     <ShoppingCart className="h-4 w-4" />
@@ -127,12 +158,6 @@ export default function Header() {
                   <Button variant="ghost" size="sm" className="flex items-center space-x-2">
                     <ShoppingCart className="h-4 w-4" />
                     <span>장바구니</span>
-                  </Button>
-                </Link>
-                <Link href="/mypage">
-                  <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                    <User className="h-4 w-4" />
-                    <span>마이페이지</span>
                   </Button>
                 </Link>
               </>

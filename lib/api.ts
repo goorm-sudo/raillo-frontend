@@ -8,43 +8,24 @@ if (!API_BASE_URL) {
     throw new Error('NEXT_PUBLIC_API_BASE_URL 환경 변수가 설정되지 않았습니다.');
 }
 
-// API 응답 타입 정의 (실제 응답 형식에 맞춤)
+// API 응답 타입 정의
 export interface ApiResponse<T = any> {
     message?: string;
     result?: T;
 }
 
-// API 에러 응답 타입
-export interface ApiErrorResponse {
-    timestamp: string;
-    errorCode: string;
-    errorMessage: string;
-    details: any;
-}
-
-// API 에러 타입
-export class ApiError extends Error {
-    constructor(
-        public status: number,
-        public errorCode: string,
-        public errorMessage: string,
-        public details?: any
-    ) {
-        super(errorMessage);
-        this.name = 'ApiError';
-    }
-}
-
-// 기본 헤더 설정
+// 기본 헤더 설정 (토큰 자동 포함)
 const getDefaultHeaders = (): Record<string, string> => {
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
     };
 
-    // 토큰이 있다면 Authorization 헤더 추가
-    const token = tokenManager.getToken();
-    if (token) {
-        headers.Authorization = `Bearer ${token}`;
+    // 토큰이 있고 유효하면 Authorization 헤더 추가
+    if (tokenManager.isAuthenticated()) {
+        const token = tokenManager.getToken();
+        if (token) {
+            headers.Authorization = `Bearer ${token}`;
+        }
     }
 
     return headers;
@@ -67,28 +48,13 @@ async function apiRequest<T>(
         const data = await response.json();
 
         if (!response.ok) {
-            // 에러 응답 처리
-            const errorData = data as ApiErrorResponse;
-            throw new ApiError(
-                response.status,
-                errorData.errorCode,
-                errorData.errorMessage,
-                errorData.details
-            );
+            throw new Error(data.message || 'API 요청에 실패했습니다.');
         }
 
-        // 성공 응답 처리
         return data as ApiResponse<T>;
-    } catch (error) {
-        if (error instanceof ApiError) {
-            throw error;
-        }
-
-        throw new ApiError(
-            500,
-            'NETWORK_ERROR',
-            error instanceof Error ? error.message : 'Unknown error occurred'
-        );
+    } catch (error: any) {
+        console.error('API Error:', error);
+        throw error;
     }
 }
 

@@ -20,6 +20,9 @@ import {
 import {Apple, Eye, EyeOff, Lock, Mail, Phone, User, UserX} from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
+import {useRouter} from "next/navigation"
+import {login} from "@/lib/api/auth"
+import {tokenManager} from "@/lib/auth"
 
 export default function LoginPage() {
   const [memberNumber, setMemberNumber] = useState("")
@@ -29,6 +32,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showGuestDialog, setShowGuestDialog] = useState(false)
   const [activeTab, setActiveTab] = useState("member")
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
+  const router = useRouter()
 
   // 페이지 로드 시 localStorage에서 회원번호 가져오기
   useEffect(() => {
@@ -40,18 +45,64 @@ export default function LoginPage() {
     }
   }, [])
 
-  const handleMemberLogin = () => {
+  // 로그인 상태 체크
+  useEffect(() => {
+    const checkAuth = () => {
+      const authenticated = tokenManager.isAuthenticated()
+      setIsLoggedIn(authenticated)
+      
+      if (authenticated) {
+        // 이미 로그인된 경우 메인 페이지로 리다이렉트
+        router.push('/')
+      }
+    }
+
+    checkAuth()
+  }, [router])
+
+  // 로딩 중이거나 인증 확인 중일 때
+  if (isLoggedIn === null) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">페이지를 불러오는 중...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  // 이미 로그인된 경우 (리다이렉트 중)
+  if (isLoggedIn) {
+    return null
+  }
+
+  const handleMemberLogin = async () => {
     if (!memberNumber || !password) {
       alert("회원번호와 비밀번호를 모두 입력해주세요.")
       return
     }
 
-    console.log("회원번호 로그인 시도:", {
-      memberNumber,
-      password,
-    })
-
-    alert(`회원번호 ${memberNumber}로 로그인을 시도합니다.`)
+    try {
+      const response = await login({ memberNo: memberNumber, password })
+      
+      if (response.result) {
+        // 토큰들을 localStorage에 저장
+        tokenManager.setLoginTokens(
+          response.result.accessToken,
+          response.result.refreshToken,
+          response.result.accessTokenExpiresIn
+        )
+        
+        // 페이지 새로고침하여 Header 상태 업데이트
+        window.location.href = "/"
+      }
+    } catch (error: any) {
+      console.error("로그인 에러:", error)
+      alert(error.message || "로그인에 실패했습니다.")
+    }
   }
 
   const handleEmailLogin = () => {

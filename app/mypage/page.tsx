@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -32,16 +32,53 @@ import {
   MapPin,
   Clock,
 } from "lucide-react"
+import { tokenManager } from "@/lib/auth"
+import { useRouter } from "next/navigation"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 
 export default function MyPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
+  const router = useRouter()
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     ticketInfo: false,
     membershipPerformance: false,
     paymentManagement: false,
     memberInfoManagement: false,
   })
+
+  useEffect(() => {
+    const checkAuth = () => {
+      const authenticated = tokenManager.isAuthenticated()
+      setIsLoggedIn(authenticated)
+      
+      if (!authenticated) {
+        // 로그인되지 않은 경우 로그인 페이지로 리다이렉트
+        router.push('/login')
+      }
+    }
+
+    checkAuth()
+  }, [router])
+
+  // 로딩 중이거나 인증 확인 중일 때
+  if (isLoggedIn === null) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">페이지를 불러오는 중...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  // 로그인되지 않은 경우 (리다이렉트 중)
+  if (!isLoggedIn) {
+    return null
+  }
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({
