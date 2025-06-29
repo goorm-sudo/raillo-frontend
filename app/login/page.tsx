@@ -360,7 +360,7 @@ export default function LoginPage() {
                       비밀번호 찾기
                     </Link>
                     <span className="text-gray-300">|</span>
-                    <Link href="/signup/verify" className="text-gray-600 hover:text-blue-600">
+                    <Link href="/signup" className="text-gray-600 hover:text-blue-600">
                       회원가입
                     </Link>
                   </div>
@@ -369,7 +369,7 @@ export default function LoginPage() {
 
               {activeTab === "guest" && (
                 <div className="mt-6 text-center text-sm">
-                  <Link href="/signup/verify" className="text-blue-600 hover:text-blue-700 font-semibold">
+                  <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">
                     회원가입하고 더 많은 혜택 받기
                   </Link>
                 </div>
@@ -431,7 +431,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
               아직 RAIL-O 회원이 아니신가요?{" "}
-              <Link href="/signup/verify" className="text-blue-600 hover:text-blue-700 font-semibold">
+              <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">
                 회원가입하기
               </Link>
             </p>
