@@ -65,6 +65,7 @@ export default function Header() {
       'tickets': '승차권 목록',
       'cart': '장바구니',
       'mypage': '마이페이지',
+      'withdraw': '회원탈퇴',
       'login': '로그인',
       'signup': '회원가입',
       'complete': '완료',

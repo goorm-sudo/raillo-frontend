@@ -36,10 +36,16 @@ export const userAPI = {
   getMyInfo: async (): Promise<ApiResponse<MemberInfoResponse>> => {
     return api.get<MemberInfoResponse>('/api/v1/members/me');
   },
+  
+  // 회원 탈퇴
+  deleteAccount: async (): Promise<ApiResponse<{ message: string }>> => {
+    return api.delete<{ message: string }>('/api/v1/members');
+  },
 };
 
 // 기존 호환성을 위한 export
 export const getMyInfo = userAPI.getMyInfo;
+export const deleteAccount = userAPI.deleteAccount;
 
 // 마이페이지용 회원 정보 조회 함수
 export const getMemberInfo = async (): Promise<MemberInfo> => {

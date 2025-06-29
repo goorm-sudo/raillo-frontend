@@ -26,9 +26,10 @@ import {useRouter} from "next/navigation"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import {getMemberInfo, MemberInfo} from "@/lib/api/user"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function MyPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
+  const { isChecking, isAuthenticated } = useAuth()
   const [memberInfo, setMemberInfo] = useState<MemberInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -40,33 +41,25 @@ export default function MyPage() {
   })
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const authenticated = tokenManager.isAuthenticated()
-      setIsLoggedIn(authenticated)
-      
-      if (!authenticated) {
-        // 로그인되지 않은 경우 로그인 페이지로 리다이렉트
-        router.push('/login')
-        return
-      }
-
-      // 로그인된 경우 회원 정보 조회
-      try {
-        const info = await getMemberInfo()
-        setMemberInfo(info)
-      } catch (error) {
-        console.error('회원 정보 조회 실패:', error)
-        // 에러 발생 시에도 페이지는 표시하되, 기본값 사용
-      } finally {
-        setLoading(false)
+    const fetchMemberInfo = async () => {
+      if (isAuthenticated) {
+        try {
+          const info = await getMemberInfo()
+          setMemberInfo(info)
+        } catch (error) {
+          console.error('회원 정보 조회 실패:', error)
+          // 에러 발생 시에도 페이지는 표시하되, 기본값 사용
+        } finally {
+          setLoading(false)
+        }
       }
     }
 
-    checkAuth()
-  }, [router])
+    fetchMemberInfo()
+  }, [isAuthenticated])
 
   // 로딩 중이거나 인증 확인 중일 때
-  if (isLoggedIn === null || loading) {
+  if (isChecking || loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -80,7 +73,7 @@ export default function MyPage() {
   }
 
   // 로그인되지 않은 경우 (리다이렉트 중)
-  if (!isLoggedIn) {
+  if (!isAuthenticated) {
     return null
   }
 
@@ -261,20 +254,14 @@ export default function MyPage() {
                       <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
                         <span>이메일/휴대폰 인증</span>
                       </div>
-                      <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
+                      <Link
+                        href="/mypage/withdraw"
+                        className="flex items-center space-x-3 px-8 py-2 text-sm text-gray-600 hover:text-blue-600"
+                      >
                         <span>회원탈퇴</span>
-                      </div>
+                      </Link>
                     </CollapsibleContent>
                   </Collapsible>
-
-                  {/* 장바구니 */}
-                  <Link
-                    href="/cart"
-                    className="flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors"
-                  >
-                    <ShoppingCart className="h-5 w-5 text-gray-600" />
-                    <span>장바구니</span>
-                  </Link>
                 </nav>
               </CardContent>
             </Card>
