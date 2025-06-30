@@ -190,39 +190,12 @@ export default function SignupPage() {
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <Header />
 
-      {/* Page Header */}
-      <div className="bg-blue-500 text-white py-6">
-        <div className="container mx-auto px-4">
-          <h1 className="text-2xl font-bold text-center">회원가입</h1>
-        </div>
-      </div>
-
-      {/* Breadcrumb */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Home className="h-4 w-4" />
-              <Link href="/" className="hover:text-blue-600">
-                홈
-              </Link>
-              <span>/</span>
-              <span className="text-gray-900">회원가입</span>
-            </div>
-            <Button variant="outline" size="sm" className="flex items-center space-x-1">
-              <Printer className="h-4 w-4" />
-              <span>인쇄</span>
-            </Button>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           <Card className="bg-white shadow-lg">
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold text-gray-900">RAIL-O 회원가입</CardTitle>
+              <CardTitle className="text-2xl font-bold text-gray-900">회원가입</CardTitle>
               <CardDescription className="text-gray-600">RAIL-O 회원이 되어 더 많은 혜택을 누리세요</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
