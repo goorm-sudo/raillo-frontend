@@ -1,4 +1,4 @@
-import { api, ApiResponse } from '../api';
+import {api, ApiResponse} from '../api';
 
 // 좌석 정보 타입
 export interface SeatInfo {
@@ -206,4 +206,9 @@ export interface ReservationRequest {
 // 예약 요청 함수
 export const makeReservation = async (request: ReservationRequest) => {
   return api.post("/api/v1/booking/reservation", request);
+};
+
+// 예약 취소 함수 (body에 reservationId를 JSON으로 보냄)
+export const deleteReservation = async (reservationId: number) => {
+  return api.delete('/api/v1/booking/reservation', { reservationId });
 }; 

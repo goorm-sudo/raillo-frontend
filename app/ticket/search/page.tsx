@@ -1,18 +1,17 @@
 "use client"
 
-import Link from "next/link"
-import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
-import { format } from "date-fns"
+import {useEffect, useRef, useState} from "react"
+import {useRouter} from "next/navigation"
+import {format} from "date-fns"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
-import { searchTrains, stationUtils, makeReservation } from "@/lib/api/train"
-import { SeatSelectionDialog } from "@/components/ui/seat-selection-dialog"
-import { BookingPanel } from "@/components/ui/booking-panel"
-import { SearchForm } from "@/components/ui/search-form"
-import { TrainList } from "@/components/ui/train-list"
-import { UsageInfo } from "@/components/ui/usage-info"
-import { tokenManager } from "@/lib/auth"
+import {makeReservation, searchTrains, stationUtils} from "@/lib/api/train"
+import {SeatSelectionDialog} from "@/components/ui/seat-selection-dialog"
+import {BookingPanel} from "@/components/ui/booking-panel"
+import {SearchForm} from "@/components/ui/search-form"
+import {TrainList} from "@/components/ui/train-list"
+import {UsageInfo} from "@/components/ui/usage-info"
+import {tokenManager} from "@/lib/auth"
 
 // 2. Add PassengerCounts interface
 interface PassengerCounts {
@@ -50,6 +49,23 @@ interface TrainInfo {
 }
 
 type SeatType = "generalSeat" | "reservedSeat" | "standingSeat"
+
+// 예약 정보 타입 정의
+interface ReservationInfo {
+  reservationId: number
+  seatReservationId: number
+  trainType: string
+  trainNumber: string
+  date: string
+  departureStation: string
+  arrivalStation: string
+  departureTime: string
+  arrivalTime: string
+  seatClass: string
+  carNumber: number
+  seats: string[]
+  price: number
+}
 
 // 3. Update the component to include passenger selection functionality and fix date selection
 export default function TrainSearchPage() {
@@ -97,6 +113,9 @@ export default function TrainSearchPage() {
   const [departureStation, setDepartureStation] = useState("")
   const [arrivalStation, setArrivalStation] = useState("")
   const [departureDateParam, setDepartureDateParam] = useState(new Date().toISOString().split("T")[0])
+
+  // 중복 호출 방지 플래그
+  const didFetchTrains = useRef(false)
 
   // 실제 API 호출 함수
   const fetchTrainsFromAPI = async (searchData: any) => {
@@ -188,25 +207,23 @@ export default function TrainSearchPage() {
   }
 
   useEffect(() => {
-    // localStorage에서 검색 조건 읽기
+    if (didFetchTrains.current) return;
+    didFetchTrains.current = true;
     const storedSearchData = localStorage.getItem('searchData')
     if (storedSearchData) {
       try {
         const parsedData = JSON.parse(storedSearchData)
         setSearchData(parsedData)
         setPassengerCounts(parsedData.passengers)
-        
         // 날짜와 시간 정보 설정
         const dateWithTime = new Date(parsedData.departureDate)
         if (parsedData.departureHour) {
           dateWithTime.setHours(parseInt(parsedData.departureHour), 0, 0, 0)
         }
         setDate(dateWithTime)
-        
         setDepartureStation(parsedData.departureStation)
         setArrivalStation(parsedData.arrivalStation)
         setSearchConditionsChanged(false)
-        
         // 실제 API 호출
         fetchTrainsFromAPI(parsedData)
       } catch (error) {
@@ -504,8 +521,10 @@ export default function TrainSearchPage() {
     try {
       const response = await makeReservation(reservationRequest)
       if (response.result) {
-        // 예약 정보로 채울 수 있는 값만 세션에 저장
-        const reservationInfo = {
+        const { reservationId, seatReservationId } = response.result as { reservationId: number; seatReservationId: number }
+        const reservationInfo: ReservationInfo = {
+          reservationId, // 예약 id 저장
+          seatReservationId, // 좌석 예약 id 저장(필요시)
           trainType: selectedTrain.trainType,
           trainNumber: selectedTrain.trainNumber,
           date: date ? date.toISOString().split('T')[0] : '',
@@ -517,7 +536,6 @@ export default function TrainSearchPage() {
           carNumber: selectedCar,
           seats: selectedSeats, // 전체 좌석 배열 추가
           price: selectedTrain[selectedSeatType].price * selectedSeats.length,
-          // paymentDeadline, reservationNumber 등은 백엔드 응답에 따라 추후 추가
         }
         sessionStorage.setItem('reservationInfo', JSON.stringify(reservationInfo))
         router.push(`/ticket/reservation`)
