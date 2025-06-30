@@ -34,7 +34,6 @@ type SeatType = "generalSeat" | "reservedSeat" | "standingSeat"
 interface TrainListProps {
   displayedTrains: TrainInfo[]
   totalResults: number
-  filteredTrains: TrainInfo[]
   selectedTrain: TrainInfo | null
   loadingMore: boolean
   hasMoreTrains: boolean
@@ -48,7 +47,6 @@ interface TrainListProps {
 export function TrainList({
   displayedTrains,
   totalResults,
-  filteredTrains,
   selectedTrain,
   loadingMore,
   hasMoreTrains,

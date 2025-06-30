@@ -71,7 +71,14 @@ async function apiRequest<T>(
 
     try {
         const response = await fetch(url, config);
-        const data = await response.json();
+
+        // 204 No Content 처리
+        if (response.status === 204) {
+            return {} as ApiResponse<T>;
+        }
+
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : {};
         const endTime = new Date();
         const duration = endTime.getTime() - startTime.getTime();
 
@@ -187,9 +194,10 @@ export const api = {
     },
 
     // DELETE 요청
-    delete: <T>(endpoint: string): Promise<ApiResponse<T>> => {
+    delete: <T>(endpoint: string, data?: any): Promise<ApiResponse<T>> => {
         return apiRequest<T>(endpoint, {
             method: 'DELETE',
+            body: data ? JSON.stringify(data) : undefined,
         });
     },
 };

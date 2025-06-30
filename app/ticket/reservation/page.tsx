@@ -31,6 +31,9 @@ import {
   ChevronDown,
   CheckCircle,
 } from "lucide-react"
+import Header from "@/components/layout/Header"
+import Footer from "@/components/layout/Footer"
+import { deleteReservation } from '@/lib/api/train'
 
 interface ReservationInfo {
   trainType: string
@@ -42,7 +45,7 @@ interface ReservationInfo {
   arrivalTime: string
   seatClass: string
   carNumber: number
-  seatNumber: string
+  seats?: string[]
   price: number
   paymentDeadline: Date
   reservationNumber: string
@@ -59,6 +62,37 @@ export default function ReservationPage() {
   const [showCartSuccessDialog, setShowCartSuccessDialog] = useState(false)
 
   useEffect(() => {
+    // sessionStorage에서 예약 정보 가져오기
+    const stored = typeof window !== 'undefined' ? sessionStorage.getItem('reservationInfo') : null
+    let reservationId = null
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        reservationId = parsed.reservationId
+        setReservation({
+          trainType: parsed.trainType,
+          trainNumber: parsed.trainNumber,
+          date: parsed.date,
+          departureStation: parsed.departureStation,
+          arrivalStation: parsed.arrivalStation,
+          departureTime: parsed.departureTime,
+          arrivalTime: parsed.arrivalTime,
+          seatClass: parsed.seatClass,
+          carNumber: parsed.carNumber,
+          seats: parsed.seats,
+          price: parsed.price,
+          paymentDeadline: addMinutes(new Date(), 10), // 10분 후 결제 기한
+          reservationNumber: '', // 추후 백엔드 응답값으로 대체
+        })
+        // reservationId를 전역에 저장
+        if (reservationId) {
+          sessionStorage.setItem('reservationId', reservationId)
+        }
+        return
+      } catch (e) {
+        // 파싱 실패 시 fallback
+      }
+    }
     // URL 파라미터에서 예약 정보 가져오기 (실제로는 API 호출)
     const mockReservation: ReservationInfo = {
       trainType: "ITX-새마을",
@@ -70,12 +104,11 @@ export default function ReservationPage() {
       arrivalTime: "13:14",
       seatClass: "일반실",
       carNumber: 3,
-      seatNumber: "8A",
+      seats: ["8A"],
       price: 42400,
-      paymentDeadline: addMinutes(new Date(), 30), // 30분 후 결제 기한
+      paymentDeadline: addMinutes(new Date(), 10), // 10분 후 결제 기한
       reservationNumber: "R2025060100001",
     }
-
     setReservation(mockReservation)
   }, [])
 
@@ -107,11 +140,21 @@ export default function ReservationPage() {
     setShowCancelDialog(true)
   }
 
-  const confirmCancelReservation = () => {
+  const confirmCancelReservation = async () => {
     setShowCancelDialog(false)
     // 실제로는 취소 API 호출 후 목록 페이지로 이동
-    alert("예약이 취소되었습니다.")
-    router.push("/")
+    try {
+      const reservationId = typeof window !== 'undefined' ? sessionStorage.getItem('reservationId') : null
+      if (reservationId) {
+        await deleteReservation(Number(reservationId))
+        alert('예약이 취소되었습니다.')
+        router.push('/')
+      } else {
+        alert('예약 ID를 찾을 수 없습니다.')
+      }
+    } catch (e) {
+      alert('예약 취소 중 오류가 발생했습니다.')
+    }
   }
 
   const handleAddToCart = () => {
@@ -170,36 +213,7 @@ export default function ReservationPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/" className="flex items-center space-x-2">
-                <Train className="h-8 w-8 text-blue-600" />
-                <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
-              </Link>
-              <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
-                <Link href="/" className="hover:text-blue-600">
-                  홈
-                </Link>
-                <span>{">"}</span>
-                <Link href="/ticket/booking" className="hover:text-blue-600">
-                  승차권예매
-                </Link>
-                <span>{">"}</span>
-                <span className="text-blue-600">예약완료</span>
-              </div>
-            </div>
-            <Link href="/ticket/search">
-              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                <ChevronLeft className="h-4 w-4" />
-                <span>돌아가기</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
@@ -271,7 +285,14 @@ export default function ReservationPage() {
                       <div className="flex items-center space-x-2">
                         <span className="font-medium">{reservation.seatClass}</span>
                         <span className="text-gray-600">
-                          {reservation.carNumber}호차 {reservation.seatNumber}
+                          {reservation.carNumber}호차
+                          {reservation.seats && reservation.seats.length > 0
+                            ? reservation.seats.map((seat, idx) => (
+                                <span key={seat}>
+                                  {idx > 0 ? ', ' : ' '}{seat}
+                                </span>
+                              ))
+                            : ''}
                         </span>
                       </div>
                       <div className="text-lg font-bold text-blue-600">{formatPrice(reservation.price)}</div>
@@ -399,47 +420,7 @@ export default function ReservationPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8 mt-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="font-semibold mb-4">고객센터</h3>
-              <p className="text-sm text-gray-300">1544-7788</p>
-              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">빠른 링크</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    이용약관
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    개인정보처리방침
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    사이트맵
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
-              <p className="text-sm text-gray-300">
-                RAIL-O는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
-              </p>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }

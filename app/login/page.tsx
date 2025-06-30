@@ -20,7 +20,7 @@ import {
 import {Apple, Eye, EyeOff, Lock, Mail, Phone, User, UserX} from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
-import {useRouter} from "next/navigation"
+import {useRouter, useSearchParams} from "next/navigation"
 import {login} from "@/lib/api/auth"
 import {tokenManager} from "@/lib/auth"
 
@@ -34,6 +34,7 @@ export default function LoginPage() {
   const [activeTab, setActiveTab] = useState("member")
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   // 페이지 로드 시 localStorage에서 회원번호 가져오기
   useEffect(() => {
@@ -96,8 +97,9 @@ export default function LoginPage() {
           response.result.accessTokenExpiresIn
         )
         
-        // 페이지 새로고침하여 Header 상태 업데이트
-        window.location.href = "/"
+        // redirectTo 쿼리 파라미터가 있으면 해당 경로로 이동, 없으면 /로 이동
+        const redirectTo = searchParams.get('redirectTo')
+        window.location.href = redirectTo ? redirectTo : "/"
       }
     } catch (error: any) {
       console.error("로그인 에러:", error)
