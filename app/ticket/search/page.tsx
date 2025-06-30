@@ -1,48 +1,17 @@
 "use client"
 
 import Link from "next/link"
-
-// 1. Update the imports to include Dialog components for passenger selection
-import { useState, useEffect } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
-import { ko } from "date-fns/locale"
-import {
-  Train,
-  ChevronLeft,
-  Clock,
-  MapPin,
-  ArrowRight,
-  Users,
-  Zap,
-  Plus,
-  Minus,
-  X,
-  CreditCard,
-  CalendarIcon,
-  ChevronRight,
-  Search,
-} from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
+import { searchTrains, stationUtils } from "@/lib/api/train"
+import { SeatSelectionDialog } from "@/components/ui/seat-selection-dialog"
+import { BookingPanel } from "@/components/ui/booking-panel"
+import { SearchForm } from "@/components/ui/search-form"
+import { TrainList } from "@/components/ui/train-list"
+import { UsageInfo } from "@/components/ui/usage-info"
 
 // 2. Add PassengerCounts interface
 interface PassengerCounts {
@@ -80,27 +49,8 @@ interface TrainInfo {
 
 type SeatType = "generalSeat" | "reservedSeat" | "standingSeat"
 
-interface SeatInfo {
-  id: string
-  row: number
-  column: string
-  isAvailable: boolean
-  isSelected: boolean
-  direction: "forward" | "backward"
-  hasUsb: boolean
-}
-
-interface CarInfo {
-  carNumber: number
-  totalSeats: number
-  availableSeats: number
-  seatType: string
-  seats: SeatInfo[]
-}
-
 // 3. Update the component to include passenger selection functionality and fix date selection
 export default function TrainSearchPage() {
-  const searchParams = useSearchParams()
   const router = useRouter()
   const [allTrains, setAllTrains] = useState<TrainInfo[]>([])
   const [displayedTrains, setDisplayedTrains] = useState<TrainInfo[]>([])
@@ -111,24 +61,22 @@ export default function TrainSearchPage() {
   const [selectedTrain, setSelectedTrain] = useState<TrainInfo | null>(null)
   const [selectedSeatType, setSelectedSeatType] = useState<SeatType>("generalSeat")
   const [showBookingPanel, setShowBookingPanel] = useState(false)
-  const trainsPerPage = 5
+  const [totalResults, setTotalResults] = useState(0)
+  const [searchConditionsChanged, setSearchConditionsChanged] = useState(false)
+
+  // 검색 조건 상태
+  const [searchData, setSearchData] = useState<{
+    departureStation: string
+    arrivalStation: string
+    departureDate: string
+    departureHour: string
+    passengers: PassengerCounts
+  } | null>(null)
 
   // Date selection state
-  const [date, setDate] = useState<Date | undefined>(() => {
-    const dateParam = searchParams.get("date")
-    if (dateParam) {
-      return new Date(dateParam)
-    }
-    return new Date()
-  })
-
-  // 상태 추가 (useState 부분에 추가)
-  const [showDateDialog, setShowDateDialog] = useState(false)
-  const [selectedTime, setSelectedTime] = useState("00시")
-  const [tempDate, setTempDate] = useState<Date | undefined>(date)
+  const [date, setDate] = useState<Date | undefined>(new Date())
 
   // Passenger selection state
-  const [showPassengerDialog, setShowPassengerDialog] = useState(false)
   const [passengerCounts, setPassengerCounts] = useState<PassengerCounts>({
     adult: 1,
     child: 0,
@@ -138,208 +86,171 @@ export default function TrainSearchPage() {
     mildlydisabled: 0,
     veteran: 0,
   })
-  const [tempPassengerCounts, setTempPassengerCounts] = useState<PassengerCounts>({ ...passengerCounts })
 
   // Seat selection state
   const [showSeatSelection, setShowSeatSelection] = useState(false)
-  const [selectedCar, setSelectedCar] = useState(1)
   const [selectedSeats, setSelectedSeats] = useState<string[]>([])
-  const [carData, setCarData] = useState<CarInfo[]>([])
+  const [selectedCar, setSelectedCar] = useState(1)
 
-  // URL parameters
-  const departureStation = searchParams.get("departure") || "서울"
-  const arrivalStation = searchParams.get("arrival") || "부산"
-  const departureDateParam = searchParams.get("date") || new Date().toISOString().split("T")[0]
-  const passengersParam = searchParams.get("passengers") || "1"
+  // URL parameters (fallback)
+  const [departureStation, setDepartureStation] = useState("")
+  const [arrivalStation, setArrivalStation] = useState("")
+  const [departureDateParam, setDepartureDateParam] = useState(new Date().toISOString().split("T")[0])
+  const [passengersParam, setPassengersParam] = useState("1")
 
-  // Passenger types for selection dialog
-  const passengerTypes = [
-    { key: "adult", label: "어른", description: "(13세 이상)", min: 1, max: 9 },
-    { key: "child", label: "어린이", description: "(6~12세)", min: 0, max: 9 },
-    { key: "infant", label: "유아", description: "(6세 미만)", min: 0, max: 9 },
-    { key: "senior", label: "경로", description: "(65세 이상)", min: 0, max: 9 },
-    { key: "severelydisabled", label: "중증 장애인", description: "", min: 0, max: 9 },
-    { key: "mildlydisabled", label: "경증 장애인", description: "", min: 0, max: 9 },
-    { key: "veteran", label: "국가 유공자", description: "", min: 0, max: 9 },
-  ]
+  // API 호출 디바운스
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
+
+  // 디바운스된 API 호출 함수
+  const debouncedFetchTrains = useCallback((searchData: any) => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout)
+    }
+    
+    const timeout = setTimeout(() => {
+      fetchTrainsFromAPI(searchData)
+    }, 500) // 500ms 디바운스
+    
+    setSearchTimeout(timeout)
+  }, [searchTimeout])
+
+  // 실제 API 호출 함수
+  const fetchTrainsFromAPI = async (searchData: any) => {
+    setLoading(true)
+    
+    try {
+      // 총 승객 수 계산
+      const totalPassengers = Object.values(searchData.passengers).reduce((sum: number, count: any) => sum + (count as number), 0)
+
+      // API 요청 파라미터 준비
+      const departureStationId = stationUtils.getStationId(searchData.departureStation)
+      const arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
+
+      if (!departureStationId || !arrivalStationId) {
+        alert("역 정보를 찾을 수 없습니다.")
+        setLoading(false)
+        return
+      }
+
+      const searchRequest = {
+        departureStationId,
+        arrivalStationId,
+        operationDate: searchData.departureDate,
+        passengerCount: totalPassengers,
+        departureHour: searchData.departureHour.replace("시", ""),
+      }
+
+      // 열차 조회 API 호출
+      const response = await searchTrains(searchRequest)
+      
+      if (response.result) {
+        // 새로운 API 응답 구조 처리
+        const content = response.result.content || response.result
+        const resultArray = Array.isArray(content) ? content : [content]
+        
+        const apiTrains: TrainInfo[] = resultArray.map((train: any, index: number) => ({
+          id: `${train.trainNumber || train.id || index}_${train.departureTime || index}_${index}`,
+          trainType: train.trainName || train.trainType || "KTX",
+          trainNumber: train.trainNumber || `${index + 1}`,
+          departureTime: train.departureTime ? train.departureTime.substring(0, 5) : "00:00",
+          arrivalTime: train.arrivalTime ? train.arrivalTime.substring(0, 5) : "00:00",
+          duration: train.formattedTravelTime || train.travelTime || "0시간 0분",
+          departureStation: train.departureStationName || train.departureStation || searchData.departureStation,
+          arrivalStation: train.arrivalStationName || train.arrivalStation || searchData.arrivalStation,
+          generalSeat: { 
+            available: train.standardSeat?.canReserve === true, 
+            price: train.standardSeat?.fare || 8400 
+          },
+          reservedSeat: { 
+            available: train.firstClassSeat?.canReserve === true, 
+            price: train.firstClassSeat?.fare || 13200 
+          },
+          standingSeat: { 
+            available: train.standing?.canReserve === true, 
+            price: train.standing?.fare || 0 
+          },
+        }))
+        
+        // 페이지네이션 정보 처리
+        const totalElements = response.result.totalElements || apiTrains.length
+        const totalPages = response.result.totalPages || 1
+        const hasNext = response.result.hasNext || false
+        
+        setAllTrains(apiTrains)
+        setDisplayedTrains(apiTrains) // 모든 데이터를 먼저 보여줌
+        setFilteredTrains(apiTrains)
+        setTotalResults(totalElements)
+        setCurrentPage(1) // 페이지 초기화
+      } else {
+        console.error("열차 조회 실패:", response.message)
+        // 실패 시 빈 결과로 설정 (alert 제거)
+        setAllTrains([])
+        setDisplayedTrains([])
+        setFilteredTrains([])
+        setTotalResults(0)
+      }
+    } catch (error) {
+      console.error("열차 조회 중 오류 발생:", error)
+      
+      // 오류 시 빈 결과로 설정 (alert 제거)
+      setAllTrains([])
+      setDisplayedTrains([])
+      setFilteredTrains([])
+      setTotalResults(0)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    // Fetch train data (mock)
-    const fetchTrains = async () => {
-      setLoading(true)
-
-      // Mock data - only KTX trains
-      const mockTrains: TrainInfo[] = [
-        {
-          id: "1",
-          trainType: "KTX",
-          trainNumber: "101",
-          departureTime: "06:00",
-          arrivalTime: "08:42",
-          duration: "2시간 42분",
-          departureStation,
-          arrivalStation,
-          generalSeat: { available: true, price: 59800 },
-          reservedSeat: { available: true, price: 96900 },
-          standingSeat: { available: false, price: 0 },
-        },
-        {
-          id: "2",
-          trainType: "KTX",
-          trainNumber: "103",
-          departureTime: "06:30",
-          arrivalTime: "09:12",
-          duration: "2시간 42분",
-          departureStation,
-          arrivalStation,
-          generalSeat: { available: true, price: 59800 },
-          reservedSeat: { available: true, price: 96900 },
-          standingSeat: { available: true, price: 53800 },
-        },
-        {
-          id: "3",
-          trainType: "KTX",
-          trainNumber: "105",
-          departureTime: "07:00",
-          arrivalTime: "09:42",
-          duration: "2시간 42분",
-          departureStation,
-          arrivalStation,
-          generalSeat: { available: false, price: 59800 },
-          reservedSeat: { available: true, price: 96900 },
-          standingSeat: { available: true, price: 53800 },
-        },
-        {
-          id: "4",
-          trainType: "KTX",
-          trainNumber: "107",
-          departureTime: "08:30",
-          arrivalTime: "11:12",
-          duration: "2시간 42분",
-          departureStation,
-          arrivalStation,
-          generalSeat: { available: true, price: 59800 },
-          reservedSeat: { available: false, price: 96900 },
-          standingSeat: { available: true, price: 53800 },
-        },
-        {
-          id: "5",
-          trainType: "KTX",
-          trainNumber: "109",
-          departureTime: "10:00",
-          arrivalTime: "12:42",
-          duration: "2시간 42분",
-          departureStation,
-          arrivalStation,
-          generalSeat: { available: true, price: 59800 },
-          reservedSeat: { available: true, price: 96900 },
-          standingSeat: { available: false, price: 0 },
-        },
-        {
-          id: "6",
-          trainType: "KTX",
-          trainNumber: "111",
-          departureTime: "11:30",
-          arrivalTime: "14:12",
-          duration: "2시간 42분",
-          departureStation,
-          arrivalStation,
-          generalSeat: { available: true, price: 59800 },
-          reservedSeat: { available: true, price: 96900 },
-          standingSeat: { available: true, price: 53800 },
-        },
-        {
-          id: "7",
-          trainType: "KTX",
-          trainNumber: "113",
-          departureTime: "12:00",
-          arrivalTime: "14:42",
-          duration: "2시간 42분",
-          departureStation,
-          arrivalStation,
-          generalSeat: { available: true, price: 59800 },
-          reservedSeat: { available: true, price: 96900 },
-          standingSeat: { available: false, price: 0 },
-        },
-        {
-          id: "8",
-          trainType: "KTX",
-          trainNumber: "115",
-          departureTime: "13:30",
-          arrivalTime: "16:12",
-          duration: "2시간 42분",
-          departureStation,
-          arrivalStation,
-          generalSeat: { available: true, price: 59800 },
-          reservedSeat: { available: true, price: 96900 },
-          standingSeat: { available: true, price: 53800 },
-        },
-      ]
-
-      // Loading simulation
-      setTimeout(() => {
-        setAllTrains(mockTrains)
-        setFilteredTrains(mockTrains)
+    // localStorage에서 검색 조건 읽기
+    const storedSearchData = localStorage.getItem('searchData')
+    if (storedSearchData) {
+      try {
+        const parsedData = JSON.parse(storedSearchData)
+        setSearchData(parsedData)
+        setPassengerCounts(parsedData.passengers)
+        
+        // 날짜와 시간 정보 설정
+        const dateWithTime = new Date(parsedData.departureDate)
+        if (parsedData.departureHour) {
+          dateWithTime.setHours(parseInt(parsedData.departureHour), 0, 0, 0)
+        }
+        setDate(dateWithTime)
+        
+        setDepartureStation(parsedData.departureStation)
+        setArrivalStation(parsedData.arrivalStation)
+        setSearchConditionsChanged(false)
+        
+        // 실제 API 호출
+        fetchTrainsFromAPI(parsedData)
+      } catch (error) {
+        console.error('검색 데이터 파싱 오류:', error)
+        // fallback으로 빈 결과 설정
+        setAllTrains([])
+        setDisplayedTrains([])
+        setFilteredTrains([])
+        setTotalResults(0)
         setLoading(false)
-      }, 1000)
+      }
+    } else {
+      // localStorage에 데이터가 없으면 기본값 설정
+      setDepartureStation("서울")
+      setArrivalStation("부산")
+      setAllTrains([])
+      setDisplayedTrains([])
+      setFilteredTrains([])
+      setTotalResults(0)
+      setLoading(false)
     }
 
-    fetchTrains()
-  }, [departureStation, arrivalStation, departureDateParam])
-
-  // Update displayed trains based on pagination
-  useEffect(() => {
-    const startIndex = 0
-    const endIndex = currentPage * trainsPerPage
-    setDisplayedTrains(filteredTrains.slice(startIndex, endIndex))
-  }, [filteredTrains, currentPage])
-
-  // Passenger selection functions
-  const updateTempPassengerCount = (type: keyof PassengerCounts, operation: "plus" | "minus") => {
-    const passengerType = passengerTypes.find((p) => p.key === type)
-    if (!passengerType) return
-
-    setTempPassengerCounts((prev) => {
-      const newCount =
-        operation === "plus" ? Math.min(prev[type] + 1, passengerType.max) : Math.max(prev[type] - 1, passengerType.min)
-
-      return {
-        ...prev,
-        [type]: newCount,
+    // Cleanup function
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout)
       }
-    })
-  }
-
-  const openPassengerDialog = () => {
-    setTempPassengerCounts({ ...passengerCounts })
-    setShowPassengerDialog(true)
-  }
-
-  const applyPassengerCounts = () => {
-    setPassengerCounts({ ...tempPassengerCounts })
-    setShowPassengerDialog(false)
-  }
-
-  const cancelPassengerSelection = () => {
-    setShowPassengerDialog(false)
-  }
-
-  const getTotalPassengers = () => {
-    return Object.values(passengerCounts).reduce((sum, count) => sum + count, 0)
-  }
-
-  const getPassengerSummary = () => {
-    const summary = []
-    if (passengerCounts.adult > 0) summary.push(`어른 ${passengerCounts.adult}명`)
-    if (passengerCounts.child > 0) summary.push(`어린이 ${passengerCounts.child}명`)
-    if (passengerCounts.infant > 0) summary.push(`유아 ${passengerCounts.infant}명`)
-    if (passengerCounts.senior > 0) summary.push(`경로 ${passengerCounts.senior}명`)
-    if (passengerCounts.severelydisabled > 0) summary.push(`중증장애인 ${passengerCounts.severelydisabled}명`)
-    if (passengerCounts.mildlydisabled > 0) summary.push(`경증장애인 ${passengerCounts.mildlydisabled}명`)
-    if (passengerCounts.veteran > 0) summary.push(`국가유공자 ${passengerCounts.veteran}명`)
-
-    return summary.length > 0 ? summary.join(", ") : "어른 1명"
-  }
+    }
+  }, [])
 
   // Update search parameters
   const handleUpdateSearch = () => {
@@ -348,22 +259,126 @@ export default function TrainSearchPage() {
       return
     }
 
-    // Create URL parameters
-    const newSearchParams = new URLSearchParams({
-      departure: departureStation,
-      arrival: arrivalStation,
-      date: format(date, "yyyy-MM-dd"),
-      passengers: getTotalPassengers().toString(),
-    })
-
-    // Add guest parameter if it exists
-    const urlParams = new URLSearchParams(window.location.search)
-    if (urlParams.get("guest") === "true") {
-      newSearchParams.set("guest", "true")
+    // 새로운 검색 조건 생성
+    const newSearchData = {
+      departureStation: departureStation,
+      arrivalStation: arrivalStation,
+      departureDate: format(date, "yyyy-MM-dd"),
+      departureHour: searchData?.departureHour || date.getHours().toString().padStart(2, '0'),
+      passengers: passengerCounts
     }
 
-    // Navigate to search results page
-    window.location.href = `/ticket/search?${newSearchParams.toString()}`
+    // localStorage에 새로운 검색 조건 저장
+    localStorage.setItem('searchData', JSON.stringify(newSearchData))
+    
+    // 검색 조건 상태 업데이트
+    setSearchData(newSearchData)
+    setSearchConditionsChanged(false)
+    
+    // 페이지 초기화
+    setCurrentPage(1)
+    
+    // 새로운 조건으로 API 호출
+    fetchTrainsFromAPI(newSearchData)
+  }
+
+  // 날짜 변경 시 검색 조건 업데이트 (즉시 검색하지 않음)
+  const handleDateChange = (newDate: Date) => {
+    setDate(newDate)
+    setSearchConditionsChanged(true)
+    
+    // 현재 검색 조건이 있으면 업데이트만 하고 검색은 하지 않음
+    if (searchData) {
+      const updatedSearchData = {
+        ...searchData,
+        departureDate: format(newDate, "yyyy-MM-dd"),
+        departureHour: newDate.getHours().toString().padStart(2, '0')
+      }
+      setSearchData(updatedSearchData)
+      localStorage.setItem('searchData', JSON.stringify(updatedSearchData))
+    }
+  }
+
+  // 승객 수 변경 시 검색 조건 업데이트 (즉시 검색하지 않음)
+  const handlePassengerChange = (newPassengerCounts: PassengerCounts) => {
+    setPassengerCounts(newPassengerCounts)
+    setSearchConditionsChanged(true)
+    
+    // 현재 검색 조건이 있으면 업데이트만 하고 검색은 하지 않음
+    if (searchData) {
+      const updatedSearchData = {
+        ...searchData,
+        passengers: newPassengerCounts
+      }
+      setSearchData(updatedSearchData)
+      localStorage.setItem('searchData', JSON.stringify(updatedSearchData))
+    }
+  }
+
+  // 출발역 변경 핸들러
+  const handleDepartureStationChange = (station: string) => {
+    if (station === (searchData?.arrivalStation || arrivalStation)) {
+      // 출발역과 도착역이 같으면 자동으로 바꾸기
+      setArrivalStation(searchData?.departureStation || departureStation)
+      setDepartureStation(station)
+      
+      // searchData도 업데이트
+      if (searchData) {
+        const updatedSearchData = {
+          ...searchData,
+          departureStation: station,
+          arrivalStation: searchData.departureStation
+        }
+        setSearchData(updatedSearchData)
+        localStorage.setItem('searchData', JSON.stringify(updatedSearchData))
+      }
+    } else {
+      setDepartureStation(station)
+      
+      // searchData도 업데이트
+      if (searchData) {
+        const updatedSearchData = {
+          ...searchData,
+          departureStation: station
+        }
+        setSearchData(updatedSearchData)
+        localStorage.setItem('searchData', JSON.stringify(updatedSearchData))
+      }
+    }
+    setSearchConditionsChanged(true)
+  }
+
+  // 도착역 변경 핸들러
+  const handleArrivalStationChange = (station: string) => {
+    if (station === (searchData?.departureStation || departureStation)) {
+      // 출발역과 도착역이 같으면 자동으로 바꾸기
+      setDepartureStation(searchData?.arrivalStation || arrivalStation)
+      setArrivalStation(station)
+      
+      // searchData도 업데이트
+      if (searchData) {
+        const updatedSearchData = {
+          ...searchData,
+          arrivalStation: station,
+          departureStation: searchData.arrivalStation
+        }
+        setSearchData(updatedSearchData)
+        localStorage.setItem('searchData', JSON.stringify(updatedSearchData))
+      }
+    } else {
+      setArrivalStation(station)
+      
+      // searchData도 업데이트
+      if (searchData) {
+        const updatedSearchData = {
+          ...searchData,
+          arrivalStation: station
+        }
+        setSearchData(updatedSearchData)
+        localStorage.setItem('searchData', JSON.stringify(updatedSearchData))
+      }
+    }
+    setSearchConditionsChanged(true)
   }
 
   const getTrainTypeColor = (trainType: string) => {
@@ -374,7 +389,7 @@ export default function TrainSearchPage() {
     return price.toLocaleString() + "원"
   }
 
-  const getSeatTypeName = (seatType: SeatType) => {
+  const getSeatTypeName = (seatType: string) => {
     switch (seatType) {
       case "generalSeat":
         return "일반실"
@@ -396,17 +411,81 @@ export default function TrainSearchPage() {
 
     setSelectedTrain(train)
     setSelectedSeatType(seatType)
-    setShowBookingPanel(true)
+    setShowBookingPanel(true) // 예매 패널 먼저 열기
   }
 
-  const handleLoadMore = () => {
+  const handleLoadMore = async () => {
+    if (!searchData) return
+    
     setLoadingMore(true)
 
-    // Loading simulation
-    setTimeout(() => {
-      setCurrentPage((prev) => prev + 1)
+    try {
+      // 다음 페이지 데이터를 가져오기 위한 API 호출
+      const nextPage = currentPage + 1
+      const departureStationId = stationUtils.getStationId(searchData.departureStation)
+      const arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
+      
+      if (!departureStationId || !arrivalStationId) {
+        console.error("역 정보를 찾을 수 없습니다.")
+        setLoadingMore(false)
+        return
+      }
+      
+      const searchRequest = {
+        departureStationId,
+        arrivalStationId,
+        operationDate: searchData.departureDate,
+        passengerCount: Object.values(searchData.passengers).reduce((sum: number, count: any) => sum + (count as number), 0),
+        departureHour: searchData.departureHour.replace("시", ""),
+        page: nextPage, // 페이지 정보 추가
+        size: 10 // 한 번에 가져올 데이터 수
+      }
+
+      const response = await searchTrains(searchRequest)
+      
+      if (response.result) {
+        const content = response.result.content || response.result
+        const resultArray = Array.isArray(content) ? content : [content]
+        
+        const newTrains: TrainInfo[] = resultArray.map((train: any, index: number) => ({
+          id: `${train.trainNumber || train.id || index}_${train.departureTime || index}_${index}_${nextPage}`,
+          trainType: train.trainName || train.trainType || "KTX",
+          trainNumber: train.trainNumber || `${index + 1}`,
+          departureTime: train.departureTime ? train.departureTime.substring(0, 5) : "00:00",
+          arrivalTime: train.arrivalTime ? train.arrivalTime.substring(0, 5) : "00:00",
+          duration: train.formattedTravelTime || train.travelTime || "0시간 0분",
+          departureStation: train.departureStationName || train.departureStation || searchData.departureStation,
+          arrivalStation: train.arrivalStationName || train.arrivalStation || searchData.arrivalStation,
+          generalSeat: { 
+            available: train.standardSeat?.canReserve === true, 
+            price: train.standardSeat?.fare || 8400 
+          },
+          reservedSeat: { 
+            available: train.firstClassSeat?.canReserve === true, 
+            price: train.firstClassSeat?.fare || 13200 
+          },
+          standingSeat: { 
+            available: train.standing?.canReserve === true, 
+            price: train.standing?.fare || 0 
+          },
+        }))
+
+        // 기존 데이터에 새 데이터 추가
+        setAllTrains(prev => [...prev, ...newTrains])
+        setDisplayedTrains(prev => [...prev, ...newTrains])
+        setFilteredTrains(prev => [...prev, ...newTrains])
+        setCurrentPage(nextPage)
+        
+        // 더 이상 데이터가 없으면 totalResults 업데이트
+        if (newTrains.length === 0) {
+          setTotalResults(displayedTrains.length)
+        }
+      }
+    } catch (error) {
+      console.error("더보기 로딩 중 오류 발생:", error)
+    } finally {
       setLoadingMore(false)
-    }, 500)
+    }
   }
 
   const handleBooking = () => {
@@ -438,39 +517,72 @@ export default function TrainSearchPage() {
   const closeBookingPanel = () => {
     setShowBookingPanel(false)
     setSelectedTrain(null)
+    setSelectedSeats([]) // 좌석 선택 초기화
+    setSelectedCar(1) // 호차 선택 초기화
   }
 
-  const hasMoreTrains = displayedTrains.length < filteredTrains.length
-
   const handleSeatClick = (seatNumber: string) => {
-    const maxSeats = getTotalPassengers()
-
     setSelectedSeats((prev) => {
       if (prev.includes(seatNumber)) {
-        // Remove if already selected
+        // 이미 선택된 좌석을 클릭한 경우 - 단순히 제거
         return prev.filter((seat) => seat !== seatNumber)
       } else {
-        // Add new seat if not at max
-        if (prev.length >= maxSeats) {
-          alert(`최대 ${maxSeats}개의 좌석만 선택할 수 있습니다.`)
-          return prev
-        }
+        // 새로운 좌석을 선택하는 경우
         return [...prev, seatNumber]
       }
     })
   }
 
-  const handleSeatSelectionApply = () => {
+  const handleSeatSelectionApply = (seats: string[], car: number) => {
     const requiredSeats = getTotalPassengers()
-
-    if (selectedSeats.length !== requiredSeats) {
+    
+    if (seats.length !== requiredSeats) {
       alert(`${requiredSeats}개의 좌석을 선택해주세요.`)
       return
     }
-
+    
+    setSelectedSeats(seats)
+    setSelectedCar(car)
     setShowSeatSelection(false)
-    // Store selected seats or process them
-    console.log("선택된 좌석:", selectedSeats)
+    setShowBookingPanel(true) // 예매 패널 다시 열기
+  }
+
+  // 클라이언트 사이드에서 URL 파라미터 읽기
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const dateParam = urlParams.get("date")
+    const departureParam = urlParams.get("departure")
+    const arrivalParam = urlParams.get("arrival")
+    const passengersParam = urlParams.get("passengers")
+
+    if (dateParam) {
+      setDate(new Date(dateParam))
+    }
+    if (departureParam) {
+      setDepartureStation(departureParam)
+    }
+    if (arrivalParam) {
+      setArrivalStation(arrivalParam)
+    }
+    if (passengersParam) {
+      setPassengersParam(passengersParam)
+    }
+  }, [])
+
+  const getTotalPassengers = () => {
+    return Object.values(passengerCounts).reduce((sum, count) => sum + count, 0)
+  }
+
+  const getPassengerSummary = () => {
+    const summaries = []
+    if (passengerCounts.adult > 0) summaries.push(`어른 ${passengerCounts.adult}명`)
+    if (passengerCounts.child > 0) summaries.push(`어린이 ${passengerCounts.child}명`)
+    if (passengerCounts.infant > 0) summaries.push(`유아 ${passengerCounts.infant}명`)
+    if (passengerCounts.senior > 0) summaries.push(`경로 ${passengerCounts.senior}명`)
+    if (passengerCounts.severelydisabled > 0) summaries.push(`중증장애인 ${passengerCounts.severelydisabled}명`)
+    if (passengerCounts.mildlydisabled > 0) summaries.push(`경증장애인 ${passengerCounts.mildlydisabled}명`)
+    if (passengerCounts.veteran > 0) summaries.push(`국가유공자 ${passengerCounts.veteran}명`)
+    return summaries.join(", ")
   }
 
   if (loading) {
@@ -491,888 +603,90 @@ export default function TrainSearchPage() {
       <Header />
       <main className="container mx-auto px-4 py-8 pb-32">
         <div className="max-w-6xl mx-auto">
-          {/* Search Summary */}
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div className="flex flex-col md:flex-row md:items-center gap-4">
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="h-5 w-5 text-blue-600" />
-                    <span className="text-lg font-semibold">{departureStation}</span>
-                    <ArrowRight className="h-4 w-4 text-gray-400" />
-                    <span className="text-lg font-semibold">{arrivalStation}</span>
-                  </div>
-
-                  <Separator orientation="vertical" className="hidden md:block h-6" />
-
-                  {/* Date Selection */}
-                  <div className="flex items-center space-x-2">
-                    <Clock className="h-5 w-5 text-blue-600" />
-                    <Button
-                      variant="outline"
-                      className="justify-start text-left font-normal w-[240px]"
-                      onClick={() => setShowDateDialog(true)}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, "yyyy년 MM월 dd일 (E)", { locale: ko }) : "출발일을 선택하세요"}
-                    </Button>
-                  </div>
-
-                  <Separator orientation="vertical" className="hidden md:block h-6" />
-
-                  {/* Passenger Selection */}
-                  <div className="flex items-center space-x-2">
-                    <Users className="h-5 w-5 text-blue-600" />
-                    <Button
-                      variant="outline"
-                      onClick={openPassengerDialog}
-                      className="justify-start text-left font-normal"
-                    >
-                      <div className="flex flex-col items-start">
-                        <span className="text-sm font-medium">총 {getTotalPassengers()}명</span>
-                        <span className="text-xs text-gray-500">{getPassengerSummary()}</span>
-                      </div>
-                    </Button>
-                  </div>
-                </div>
-
-                <Button onClick={handleUpdateSearch} variant="outline">
-                  검색 조건 적용
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Search Form */}
+          <SearchForm
+            searchData={searchData}
+            departureStation={departureStation}
+            arrivalStation={arrivalStation}
+            date={date}
+            passengerCounts={passengerCounts}
+            searchConditionsChanged={searchConditionsChanged}
+            onDepartureStationChange={handleDepartureStationChange}
+            onArrivalStationChange={handleArrivalStationChange}
+            onDateChange={handleDateChange}
+            onPassengerChange={handlePassengerChange}
+            onSearch={handleUpdateSearch}
+          />
 
           {/* Train List */}
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">
-                검색 결과 ({filteredTrains.length}개)
+                검색 결과 ({totalResults > 0 ? totalResults : filteredTrains.length}개)
               </h2>
               <div className="text-sm text-gray-600">* 요금은 어른 기준이며, 할인 혜택이 적용될 수 있습니다.</div>
             </div>
 
-            {displayedTrains.length === 0 ? (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <Train className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">검색 결과가 없습니다</h3>
-                  <p className="text-gray-600 mb-4">선택하신 조건에 맞는 열차가 없습니다.</p>
-                  <Button onClick={() => router.push("/ticket/booking")} variant="outline">
-                    다시 검색하기
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                {displayedTrains.map((train) => (
-                  <Card
-                    key={train.id}
-                    className={`hover:shadow-lg transition-shadow ${
-                      selectedTrain?.id === train.id ? "ring-2 ring-blue-500 bg-blue-50" : ""
-                    }`}
-                  >
-                    <CardContent className="p-6">
-                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-                        {/* Train Info */}
-                        <div className="lg:col-span-4">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <Badge className={`${getTrainTypeColor(train.trainType)} px-3 py-1`}>
-                              {train.trainType}
-                            </Badge>
-                            <span className="font-semibold text-lg">{train.trainNumber}</span>
-                            <Zap className="h-4 w-4 text-yellow-500" />
-                          </div>
-                          <div className="flex items-center space-x-4 text-sm text-gray-600">
-                            <span>{train.departureStation}</span>
-                            <ArrowRight className="h-4 w-4" />
-                            <span>{train.arrivalStation}</span>
-                          </div>
-                        </div>
-
-                        {/* Time Info */}
-                        <div className="lg:col-span-3">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="text-2xl font-bold text-blue-600">{train.departureTime}</span>
-                            <ArrowRight className="h-4 w-4 text-gray-400" />
-                            <span className="text-2xl font-bold text-blue-600">{train.arrivalTime}</span>
-                          </div>
-                          <div className="text-sm text-gray-600">{train.duration}</div>
-                        </div>
-
-                        {/* Seat Options */}
-                        <div className="lg:col-span-5">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            {/* 일반실 */}
-                            <div className="border rounded-lg p-3">
-                              <div className="text-sm font-medium mb-1">일반실</div>
-                              <div className="text-lg font-bold text-blue-600 mb-2">
-                                {formatPrice(train.generalSeat.price)}
-                              </div>
-                              <Button
-                                size="sm"
-                                className="w-full"
-                                disabled={!train.generalSeat.available}
-                                onClick={() => handleSeatSelection(train, "generalSeat")}
-                              >
-                                {train.generalSeat.available ? "선택" : "매진"}
-                              </Button>
-                            </div>
-
-                            {/* 특실 */}
-                            <div className="border rounded-lg p-3">
-                              <div className="text-sm font-medium mb-1">특실</div>
-                              <div className="text-lg font-bold text-blue-600 mb-2">
-                                {formatPrice(train.reservedSeat.price)}
-                              </div>
-                              <Button
-                                size="sm"
-                                className="w-full"
-                                disabled={!train.reservedSeat.available}
-                                onClick={() => handleSeatSelection(train, "reservedSeat")}
-                              >
-                                {train.reservedSeat.available ? "선택" : "매진"}
-                              </Button>
-                            </div>
-
-                            {/* 입석 */}
-                            <div className="border rounded-lg p-3">
-                              <div className="text-sm font-medium mb-1">입석</div>
-                              <div className="text-lg font-bold text-blue-600 mb-2">
-                                {train.standingSeat.available ? formatPrice(train.standingSeat.price) : "-"}
-                              </div>
-                              <Button
-                                size="sm"
-                                className="w-full"
-                                variant="outline"
-                                disabled={!train.standingSeat.available}
-                                onClick={() => handleSeatSelection(train, "standingSeat")}
-                              >
-                                {train.standingSeat.available ? "선택" : "없음"}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {/* Load More Button */}
-                {hasMoreTrains && (
-                  <div className="text-center py-6">
-                    <Button
-                      onClick={handleLoadMore}
-                      disabled={loadingMore}
-                      variant="outline"
-                      size="lg"
-                      className="px-8"
-                    >
-                      {loadingMore ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                          로딩 중...
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="h-4 w-4 mr-2" />
-                          더보기 ({filteredTrains.length - displayedTrains.length}개 더)
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
+            <TrainList
+              displayedTrains={displayedTrains}
+              totalResults={totalResults}
+              filteredTrains={filteredTrains}
+              selectedTrain={selectedTrain}
+              loadingMore={loadingMore}
+              hasMoreTrains={totalResults > displayedTrains.length}
+              onSeatSelection={handleSeatSelection}
+              onLoadMore={handleLoadMore}
+              getTrainTypeColor={getTrainTypeColor}
+              formatPrice={formatPrice}
+              getSeatTypeName={getSeatTypeName}
+            />
           </div>
 
-          {/* Additional Info */}
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle className="text-lg">이용 안내</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-gray-600">
-              <p>• 표시된 요금은 어른 기준이며, 어린이·경로·장애인 할인이 적용될 수 있습니다.</p>
-              <p>• 승차권 구입 후 출발시간 20분 전까지 취소 가능합니다.</p>
-              <p>• KTX는 전 좌석 지정석입니다.</p>
-              <p>• 입석은 좌석이 매진된 경우에만 판매됩니다.</p>
-            </CardContent>
-          </Card>
+          {/* Usage Info */}
+          <UsageInfo />
         </div>
       </main>
 
-      {/* Date Selection Dialog */}
-      <Dialog open={showDateDialog} onOpenChange={setShowDateDialog}>
-        <DialogContent className="sm:max-w-lg p-0 max-h-[90vh] overflow-y-auto">
-          <div className="p-4 border-b">
-            <DialogTitle className="text-xl font-bold">날짜 선택</DialogTitle>
-          </div>
+      {/* Seat Selection Dialog */}
+      <SeatSelectionDialog
+        isOpen={showSeatSelection}
+        onClose={() => setShowSeatSelection(false)}
+        selectedTrain={selectedTrain}
+        selectedSeatType={selectedSeatType}
+        selectedSeats={selectedSeats}
+        onSeatClick={handleSeatClick}
+        onApply={handleSeatSelectionApply}
+        getSeatTypeName={getSeatTypeName}
+        getTotalPassengers={getTotalPassengers}
+      />
 
-          <div className="p-4">
-            {/* Selected Date Display */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-4 text-center">
-              <div className="text-xl font-bold text-blue-600">
-                {tempDate ? format(tempDate, "yyyy년 MM월 dd일(E)", { locale: ko }) : "날짜를 선택하세요"}
-              </div>
-              <div className="text-sm text-gray-600 mt-1">{selectedTime} 이후 출발</div>
-            </div>
-
-            {/* Calendar */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-3">
-                <button
-                  className="p-2 hover:bg-gray-100 rounded"
-                  onClick={() => {
-                    if (tempDate) {
-                      const prevMonth = new Date(tempDate)
-                      prevMonth.setMonth(prevMonth.getMonth() - 1)
-                      setTempDate(prevMonth)
-                    }
-                  }}
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                </button>
-                <h3 className="text-lg font-bold">{tempDate ? format(tempDate, "yyyy. MM.", { locale: ko }) : ""}</h3>
-                <button
-                  className="p-2 hover:bg-gray-100 rounded"
-                  onClick={() => {
-                    if (tempDate) {
-                      const nextMonth = new Date(tempDate)
-                      nextMonth.setMonth(nextMonth.getMonth() + 1)
-                      setTempDate(nextMonth)
-                    }
-                  }}
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* 날짜 직접 선택 필드 */}
-              <div className="flex items-center justify-center space-x-2 mb-4 bg-gray-50 p-3 rounded-lg">
-                <div className="flex items-center space-x-1">
-                  <Select
-                    value={tempDate ? tempDate.getFullYear().toString() : new Date().getFullYear().toString()}
-                    onValueChange={(value) => {
-                      if (tempDate) {
-                        const newDate = new Date(tempDate)
-                        newDate.setFullYear(Number.parseInt(value))
-                        setTempDate(newDate)
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-[90px] h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((year) => (
-                        <SelectItem key={year} value={year.toString()}>
-                          {year}년
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center space-x-1">
-                  <Select
-                    value={tempDate ? (tempDate.getMonth() + 1).toString() : (new Date().getMonth() + 1).toString()}
-                    onValueChange={(value) => {
-                      if (tempDate) {
-                        const newDate = new Date(tempDate)
-                        newDate.setMonth(Number.parseInt(value) - 1)
-                        setTempDate(newDate)
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-[80px] h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                        <SelectItem key={month} value={month.toString()}>
-                          {month}월
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center space-x-1">
-                  <Select
-                    value={tempDate ? tempDate.getDate().toString() : new Date().getDate().toString()}
-                    onValueChange={(value) => {
-                      if (tempDate) {
-                        const newDate = new Date(tempDate)
-                        newDate.setDate(Number.parseInt(value))
-                        setTempDate(newDate)
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-[80px] h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(
-                        {
-                          length: tempDate
-                            ? new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 0).getDate()
-                            : 31,
-                        },
-                        (_, i) => i + 1,
-                      ).map((day) => (
-                        <SelectItem key={day} value={day.toString()}>
-                          {day}일
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Custom Calendar */}
-              <div className="border rounded-lg overflow-hidden bg-white">
-                {/* Days of week header */}
-                <div className="grid grid-cols-7 bg-gray-50">
-                  {["일", "월", "화", "수", "목", "금", "토"].map((day, index) => (
-                    <div
-                      key={day}
-                      className={`p-3 text-center text-sm font-medium ${index === 0 ? "text-red-500" : index === 6 ? "text-blue-500" : "text-gray-700"}`}
-                    >
-                      {day}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Calendar grid */}
-                <div className="grid grid-cols-7">
-                  {(() => {
-                    if (!tempDate) return null
-
-                    const year = tempDate.getFullYear()
-                    const month = tempDate.getMonth()
-                    const firstDay = new Date(year, month, 1)
-                    const lastDay = new Date(year, month + 1, 0)
-                    const startDate = new Date(firstDay)
-                    startDate.setDate(startDate.getDate() - firstDay.getDay())
-
-                    const days = []
-                    const today = new Date()
-                    today.setHours(0, 0, 0, 0)
-
-                    for (let i = 0; i < 42; i++) {
-                      const currentDate = new Date(startDate)
-                      currentDate.setDate(startDate.getDate() + i)
-
-                      const isCurrentMonth = currentDate.getMonth() === month
-                      const isToday = currentDate.getTime() === today.getTime()
-                      const isSelected = tempDate && currentDate.toDateString() === tempDate.toDateString()
-                      const isPast = currentDate < today
-                      const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6
-
-                      days.push(
-                        <button
-                          key={i}
-                          onClick={() => {
-                            if (!isPast && isCurrentMonth) {
-                              setTempDate(currentDate)
-                            }
-                          }}
-                          disabled={isPast || !isCurrentMonth}
-                          className={`
-                            p-3 text-sm transition-colors relative
-                            ${
-                              isCurrentMonth
-                                ? isPast
-                                  ? "text-gray-300 cursor-not-allowed"
-                                  : isSelected
-                                    ? "bg-blue-600 text-white font-semibold"
-                                    : isToday
-                                      ? "bg-blue-100 text-blue-600 font-semibold hover:bg-blue-200"
-                                      : isWeekend
-                                        ? currentDate.getDay() === 0
-                                          ? "text-red-500 hover:bg-red-50"
-                                          : "text-blue-500 hover:bg-blue-50"
-                                        : "text-gray-900 hover:bg-gray-100"
-                                : "text-gray-300"
-                            }
-                          `}
-                        >
-                          {currentDate.getDate()}
-                        </button>,
-                      )
-                    }
-
-                    return days
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            {/* Time Selection */}
-            <div className="mb-4">
-              <h4 className="text-sm font-medium mb-3">시간선택</h4>
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  "00시",
-                  "01시",
-                  "02시",
-                  "03시",
-                  "04시",
-                  "06시",
-                  "08시",
-                  "10시",
-                  "12시",
-                  "14시",
-                  "16시",
-                  "18시",
-                  "20시",
-                  "22시",
-                ].map((time) => (
-                  <Button
-                    key={time}
-                    variant={selectedTime === time ? "default" : "outline"}
-                    className={`text-xs py-2 px-3 ${selectedTime === time ? "bg-blue-600" : ""}`}
-                    onClick={() => setSelectedTime(time)}
-                  >
-                    {time}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex border-t p-4">
-            <Button variant="outline" onClick={() => setShowDateDialog(false)} className="flex-1 mr-2">
-              취소
-            </Button>
-            <Button
-              onClick={() => {
-                if (tempDate) {
-                  setDate(tempDate)
-                  setShowDateDialog(false)
-                }
-              }}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
-            >
-              적용
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Passenger Selection Dialog */}
-      <Dialog open={showPassengerDialog} onOpenChange={setShowPassengerDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>승객 정보 선택</DialogTitle>
-            <DialogDescription>여행하실 승객의 인원수를 선택해주세요.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {passengerTypes.map((passengerType) => (
-              <div key={passengerType.key} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex flex-col">
-                  <span className="font-medium">{passengerType.label}</span>
-                  {passengerType.description && (
-                    <span className="text-sm text-gray-500">{passengerType.description}</span>
-                  )}
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateTempPassengerCount(passengerType.key as keyof PassengerCounts, "minus")}
-                    disabled={tempPassengerCounts[passengerType.key as keyof PassengerCounts] <= passengerType.min}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="text-lg font-semibold w-8 text-center">
-                    {tempPassengerCounts[passengerType.key as keyof PassengerCounts]}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateTempPassengerCount(passengerType.key as keyof PassengerCounts, "plus")}
-                    disabled={tempPassengerCounts[passengerType.key as keyof PassengerCounts] >= passengerType.max}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <DialogFooter className="flex space-x-2">
-            <Button variant="outline" onClick={cancelPassengerSelection} className="flex-1">
-              취소
-            </Button>
-            <Button onClick={applyPassengerCounts} className="flex-1 bg-blue-600 hover:bg-blue-700">
-              적용
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Booking Panel - Bottom Sidebar */}
-      {showBookingPanel && selectedTrain && (
-        <>
-          {/* Overlay */}
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={closeBookingPanel} />
-
-          {/* Bottom Panel */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out">
-            <div className="container mx-auto px-4 py-6 max-w-6xl">
-              {/* Panel Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-4">
-                  <Badge className={`${getTrainTypeColor(selectedTrain.trainType)} px-3 py-1`}>
-                    {selectedTrain.trainType}
-                  </Badge>
-                  <span className="text-xl font-bold">{selectedTrain.trainNumber}</span>
-                  <span className="text-gray-600">열차 예매</span>
-                </div>
-                <Button variant="ghost" size="sm" onClick={closeBookingPanel}>
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                {/* Train Schedule */}
-                <div className="lg:col-span-1">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-                    <Clock className="h-4 w-4 mr-2" />
-                    열차 시각
-                  </h3>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-600">출발</span>
-                      <span className="font-semibold">{selectedTrain.departureTime}</span>
-                    </div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-600">도착</span>
-                      <span className="font-semibold">{selectedTrain.arrivalTime}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">소요시간</span>
-                      <span className="font-semibold">{selectedTrain.duration}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Fare Information */}
-                <div className="lg:col-span-1">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    운임 요금
-                  </h3>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="text-center">
-                      <div className="text-sm text-gray-600 mb-1">{getSeatTypeName(selectedSeatType)}</div>
-                      <div className="text-2xl font-bold text-blue-600">
-                        {formatPrice(selectedTrain[selectedSeatType].price * getTotalPassengers())}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">{getPassengerSummary()}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Seat Selection */}
-                <div className="lg:col-span-1">
-                  <h3 className="font-semibold text-gray-900 mb-3">좌석 선택</h3>
-                  <div className="space-y-3">
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="text-sm text-gray-600 mb-1">선택된 좌석</div>
-                      <div className="text-lg font-semibold">{getSeatTypeName(selectedSeatType)}</div>
-                      <div className="text-sm text-gray-500">좌석을 선택해주세요</div>
-                    </div>
-                    <Button onClick={() => setShowSeatSelection(true)} variant="outline" className="w-full">
-                      좌석 선택
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Booking Button */}
-                <div className="lg:col-span-1">
-                  <h3 className="font-semibold text-gray-900 mb-3">예매하기</h3>
-                  <div className="space-y-3">
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <div className="text-sm text-gray-600 mb-1">총 결제 금액</div>
-                      <div className="text-xl font-bold text-blue-600">
-                        {formatPrice(selectedTrain[selectedSeatType].price * getTotalPassengers())}
-                      </div>
-                    </div>
-                    <Button
-                      onClick={handleBooking}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
-                      size="lg"
-                    >
-                      예매하기
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Seat Selection Dialog - Improved Train Layout */}
-      {showSeatSelection && selectedTrain && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden">
-            {/* Dialog Header */}
-            <div className="flex items-center justify-between p-6 border-b bg-white">
-              <h2 className="text-xl font-bold">
-                좌석선택({selectedTrain.trainType}, {selectedTrain.trainNumber})
-              </h2>
-              <Button variant="ghost" size="sm" onClick={() => setShowSeatSelection(false)}>
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            {/* Car Selection */}
-            <div className="p-4 border-b bg-gray-50">
-              <div className="flex items-center justify-center">
-                <Select
-                  value={selectedCar.toString()}
-                  onValueChange={(value) => setSelectedCar(Number.parseInt(value))}
-                >
-                  <SelectTrigger className="w-64">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[1, 2, 3, 4, 5].map((car) => (
-                      <SelectItem key={car} value={car.toString()}>
-                        {car}호차 (36석) {getSeatTypeName(selectedSeatType)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Seat Legend */}
-            <div className="p-4 border-b bg-gray-50">
-              <div className="flex items-center justify-end space-x-6 text-sm">
-                <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 bg-blue-100 border border-blue-300 rounded flex items-center justify-center">
-                    <span className="text-xs">↑</span>
-                  </div>
-                  <span>순방향</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 bg-gray-200 border border-gray-300 rounded flex items-center justify-center">
-                    <span className="text-xs">↓</span>
-                  </div>
-                  <span>역방향</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 bg-blue-600 border border-blue-700 rounded"></div>
-                  <span>선택</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 bg-yellow-200 border border-yellow-400 rounded flex items-center justify-center">
-                    <span className="text-xs">⚡</span>
-                  </div>
-                  <span>콘센트 USB</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Train Seat Map */}
-            <div className="p-6 overflow-auto max-h-[60vh]">
-              <div className="border-2 border-blue-300 rounded-lg p-6 bg-blue-50 min-w-[800px]">
-                {/* Direction Indicator */}
-                <div className="flex justify-between items-center mb-6 text-sm text-gray-600">
-                  <span className="font-semibold">대구</span>
-                  <div className="flex items-center space-x-1">
-                    {Array.from({ length: 20 }, (_, i) => (
-                      <span key={i} className="text-blue-400">
-                        →
-                      </span>
-                    ))}
-                  </div>
-                  <span className="font-semibold">서울</span>
-                </div>
-
-                {/* Train Layout */}
-                <div className="flex items-center justify-center">
-                  <div className="flex items-center space-x-4">
-                    {/* Left Restrooms */}
-                    <div className="flex flex-col space-y-2">
-                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center border">
-                        <span className="text-xs">🚻</span>
-                      </div>
-                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center border">
-                        <span className="text-xs">🚻</span>
-                      </div>
-                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center border">
-                        <span className="text-xs">🚻</span>
-                      </div>
-                    </div>
-
-                    {/* Seat Grid */}
-                    <div className="grid grid-rows-4 grid-flow-col gap-2">
-                      {/* Row D (Window) */}
-                      {Array.from({ length: 16 }, (_, i) => {
-                        const seatNumber = `${i + 1}D`
-                        const isOccupied = Math.random() > 0.7
-                        const isSelected = selectedSeats.includes(seatNumber)
-                        const hasUsb = i % 4 === 0
-
-                        return (
-                          <button
-                            key={seatNumber}
-                            onClick={() => !isOccupied && handleSeatClick(seatNumber)}
-                            disabled={isOccupied}
-                            className={`
-                              w-12 h-12 text-xs font-medium rounded border-2 transition-all duration-200 hover:scale-105
-                              ${
-                                isSelected
-                                  ? "bg-blue-600 text-white border-blue-700 shadow-lg"
-                                  : isOccupied
-                                    ? "bg-gray-400 text-white border-gray-500 cursor-not-allowed"
-                                    : hasUsb
-                                      ? "bg-yellow-100 border-yellow-300 hover:bg-yellow-200 text-gray-800"
-                                      : "bg-blue-100 border-blue-300 hover:bg-blue-200 text-gray-800"
-                              }
-                            `}
-                          >
-                            {seatNumber}
-                          </button>
-                        )
-                      })}
-
-                      {/* Row C */}
-                      {Array.from({ length: 16 }, (_, i) => {
-                        const seatNumber = `${i + 1}C`
-                        const isOccupied = Math.random() > 0.7
-                        const isSelected = selectedSeats.includes(seatNumber)
-                        const hasUsb = i % 4 === 0
-
-                        return (
-                          <button
-                            key={seatNumber}
-                            onClick={() => !isOccupied && handleSeatClick(seatNumber)}
-                            disabled={isOccupied}
-                            className={`
-                              w-12 h-12 text-xs font-medium rounded border-2 transition-all duration-200 hover:scale-105
-                              ${
-                                isSelected
-                                  ? "bg-blue-600 text-white border-blue-700 shadow-lg"
-                                  : isOccupied
-                                    ? "bg-gray-400 text-white border-gray-500 cursor-not-allowed"
-                                    : hasUsb
-                                      ? "bg-yellow-100 border-yellow-300 hover:bg-yellow-200 text-gray-800"
-                                      : "bg-blue-100 border-blue-300 hover:bg-blue-200 text-gray-800"
-                              }
-                            `}
-                          >
-                            {seatNumber}
-                          </button>
-                        )
-                      })}
-
-                      {/* Aisle space */}
-                      <div className="h-4"></div>
-
-                      {/* Row B */}
-                      {Array.from({ length: 16 }, (_, i) => {
-                        const seatNumber = `${i + 1}B`
-                        const isOccupied = Math.random() > 0.7
-                        const isSelected = selectedSeats.includes(seatNumber)
-                        const hasUsb = i % 4 === 0
-
-                        return (
-                          <button
-                            key={seatNumber}
-                            onClick={() => !isOccupied && handleSeatClick(seatNumber)}
-                            disabled={isOccupied}
-                            className={`
-                              w-12 h-12 text-xs font-medium rounded border-2 transition-all duration-200 hover:scale-105
-                              ${
-                                isSelected
-                                  ? "bg-blue-600 text-white border-blue-700 shadow-lg"
-                                  : isOccupied
-                                    ? "bg-gray-400 text-white border-gray-500 cursor-not-allowed"
-                                    : hasUsb
-                                      ? "bg-yellow-100 border-yellow-300 hover:bg-yellow-200 text-gray-800"
-                                      : "bg-blue-100 border-blue-300 hover:bg-blue-200 text-gray-800"
-                              }
-                            `}
-                          >
-                            {seatNumber}
-                          </button>
-                        )
-                      })}
-
-                      {/* Row A (Window) */}
-                      {Array.from({ length: 16 }, (_, i) => {
-                        const seatNumber = `${i + 1}A`
-                        const isOccupied = Math.random() > 0.7
-                        const isSelected = selectedSeats.includes(seatNumber)
-                        const hasUsb = i % 4 === 0
-
-                        return (
-                          <button
-                            key={seatNumber}
-                            onClick={() => !isOccupied && handleSeatClick(seatNumber)}
-                            disabled={isOccupied}
-                            className={`
-                              w-12 h-12 text-xs font-medium rounded border-2 transition-all duration-200 hover:scale-105
-                              ${
-                                isSelected
-                                  ? "bg-blue-600 text-white border-blue-700 shadow-lg"
-                                  : isOccupied
-                                    ? "bg-gray-400 text-white border-gray-500 cursor-not-allowed"
-                                    : hasUsb
-                                      ? "bg-yellow-100 border-yellow-300 hover:bg-yellow-200 text-gray-800"
-                                      : "bg-blue-100 border-blue-300 hover:bg-blue-200 text-gray-800"
-                              }
-                            `}
-                          >
-                            {seatNumber}
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {/* Right Restrooms */}
-                    <div className="flex flex-col space-y-2">
-                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center border">
-                        <span className="text-xs">🚻</span>
-                      </div>
-                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center border">
-                        <span className="text-xs">🚻</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Dialog Footer */}
-            <div className="p-6 border-t bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  선택된 좌석: {selectedSeats.length > 0 ? selectedSeats.join(", ") : "없음"}
-                </div>
-                <Button
-                  onClick={handleSeatSelectionApply}
-                  disabled={selectedSeats.length !== getTotalPassengers()}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8"
-                >
-                  선택적용({selectedSeats.length}명 좌석 선택/총 {getTotalPassengers()}명)
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Booking Panel */}
+      <BookingPanel
+        isOpen={showBookingPanel}
+        onClose={closeBookingPanel}
+        selectedTrain={selectedTrain}
+        selectedSeatType={selectedSeatType}
+        selectedSeats={selectedSeats}
+        selectedCar={selectedCar}
+        onSeatSelection={() => {
+          // BookingPanel 닫기
+          setShowBookingPanel(false)
+          
+          // 약간의 지연 후 좌석 선택 다이얼로그 열기
+          setTimeout(() => {
+            setShowSeatSelection(true)
+          }, 100)
+        }}
+        onBooking={handleBooking}
+        getTrainTypeColor={getTrainTypeColor}
+        getSeatTypeName={getSeatTypeName}
+        formatPrice={formatPrice}
+        getTotalPassengers={getTotalPassengers}
+        getPassengerSummary={getPassengerSummary}
+      />
 
       <Footer />
     </div>
   )
 }
+
