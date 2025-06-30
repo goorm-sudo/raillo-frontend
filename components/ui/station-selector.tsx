@@ -12,9 +12,10 @@ interface StationSelectorProps {
   onValueChange: (value: string) => void
   placeholder: string
   label: string
+  variant?: "blue" | "white"
 }
 
-export function StationSelector({ value, onValueChange, placeholder, label }: StationSelectorProps) {
+export function StationSelector({ value, onValueChange, placeholder, label, variant = "blue" }: StationSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [filteredStations, setFilteredStations] = useState<Station[]>(STATIONS)
@@ -42,7 +43,7 @@ export function StationSelector({ value, onValueChange, placeholder, label }: St
   return (
     <>
       <div>
-        <label className="block text-sm font-medium text-blue-100 mb-2">{label}</label>
+        <label className={`block text-sm font-medium mb-2 ${variant === "blue" ? "text-white" : "text-gray-700"}`}>{label}</label>
         <Button
           variant="outline"
           className="w-full justify-start text-left font-normal bg-white text-gray-900 hover:bg-gray-50"

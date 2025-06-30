@@ -21,9 +21,10 @@ interface PassengerSelectorProps {
   placeholder: string
   label: string
   simple?: boolean // 간단한 모드 (어른만 선택)
+  variant?: "blue" | "white"
 }
 
-export function PassengerSelector({ value, onValueChange, placeholder, label, simple = false }: PassengerSelectorProps) {
+export function PassengerSelector({ value, onValueChange, placeholder, label, simple = false, variant = "blue" }: PassengerSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [tempPassengerCounts, setTempPassengerCounts] = useState<PassengerCounts>(value)
 
@@ -92,7 +93,7 @@ export function PassengerSelector({ value, onValueChange, placeholder, label, si
   return (
     <>
       <div>
-        <label className="block text-sm font-medium text-blue-100 mb-2">{label}</label>
+        <label className={`block text-sm font-medium mb-2 ${variant === "blue" ? "text-white" : "text-gray-700"}`}>{label}</label>
         <Button
           variant="outline"
           className="w-full justify-start text-left font-normal bg-white text-gray-900 hover:bg-gray-50"
