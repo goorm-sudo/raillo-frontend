@@ -32,6 +32,7 @@ import {
   Download,
 } from "lucide-react"
 import { paymentApi } from "@/lib/api/client"
+import { getLoginInfo, isTokenExpired } from "@/lib/utils"
 
 interface PaymentHistoryItem {
   paymentId: number;
@@ -72,11 +73,15 @@ export default function PaymentHistoryPage() {
     memberInfoManagement: false,
   })
 
+  // 로그인 정보 상태
+  const [loginInfo, setLoginInfo] = useState<any>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [searchParams, setSearchParams] = useState({
-    startDate: new Date(new Date().setMonth(new Date().getMonth() - 3)).toISOString().split('T')[0], // 3개월 전
-    endDate: new Date().toISOString().split('T')[0], // 오늘
+    startDate: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().split('T')[0], // 6개월 전
+    endDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0], // 내일 (오늘 결제 포함)
     paymentMethod: 'all',
   })
 
@@ -87,22 +92,69 @@ export default function PaymentHistoryPage() {
     }))
   }
 
+  // 로그인 정보 확인
+  const checkLoginStatus = () => {
+    // 강제로 개발용 토큰 설정
+    const devToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJURVNUMDAxIiwiaWF0IjoxNzM1MzAzNzMzLCJleHAiOjk5OTk5OTk5OTksInVzZXJJZCI6IjEiLCJ1c2VybmFtZSI6IlRFU1QwMDEifQ.test'
+    localStorage.setItem('accessToken', devToken)
+
+    // 개발용 로그인 정보 설정
+    const mockLoginInfo = {
+      isLoggedIn: true,
+      userId: 1,
+      username: 'TEST001',
+      memberNo: 'RAILLO000001',
+      email: 'test001@example.com',
+      exp: 99999999999
+    }
+    
+    setLoginInfo(mockLoginInfo)
+    setIsLoggedIn(true)
+  }
+
   // 결제 내역 조회
   const fetchPaymentHistory = async () => {
     setLoading(true)
     try {
-      // 임시로 memberId를 1로 설정 (실제로는 로그인된 사용자 정보에서 가져와야 함)
-      const memberId = 1;
+      if (!isLoggedIn || !loginInfo?.userId) {
+        setPaymentHistory({
+          payments: [],
+          totalElements: 0,
+          totalPages: 0,
+          currentPage: 0,
+          pageSize: 20,
+        });
+        return;
+      }
+
+      const memberId = parseInt(loginInfo.userId.toString());
+      const token = localStorage.getItem('accessToken');
       
-      const response = await paymentApi.getPaymentHistory({
-        memberId,
-        startDate: `${searchParams.startDate}T00:00:00`,
-        endDate: `${searchParams.endDate}T23:59:59`,
+      // URL 파라미터 구성
+      let apiUrl = `http://localhost:8080/api/v1/payments/history?memberId=${memberId}&startDate=${searchParams.startDate}T00:00:00&endDate=${searchParams.endDate}T23:59:59`;
+      
+      // 결제방법이 "all"이 아닌 경우에만 paymentMethod 파라미터 추가
+      if (searchParams.paymentMethod !== 'all') {
+        apiUrl += `&paymentMethod=${searchParams.paymentMethod}`;
+      }
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
       
-      setPaymentHistory(response);
+      setPaymentHistory(data);
     } catch (error) {
-      console.error('결제 내역 조회 실패:', error);
+      console.error('❌ 결제 내역 조회 실패:', error);
       // 에러 시 빈 데이터로 설정
       setPaymentHistory({
         payments: [],
@@ -116,10 +168,17 @@ export default function PaymentHistoryPage() {
     }
   }
 
-  // 컴포넌트 마운트 시 결제 내역 조회
+  // 컴포넌트 마운트 시 로그인 상태 확인
   useEffect(() => {
-    fetchPaymentHistory();
+    checkLoginStatus();
   }, []);
+
+  // 로그인 상태 변경 시 결제 내역 조회
+  useEffect(() => {
+    if (loginInfo) {
+      fetchPaymentHistory();
+    }
+  }, [loginInfo, isLoggedIn]);
 
   // 결제 상태에 따른 배지 색상
   const getStatusBadgeVariant = (status: string) => {
@@ -227,8 +286,10 @@ export default function PaymentHistoryPage() {
                     비즈니스
                   </Badge>
                 </div>
-                <h3 className="font-bold text-lg">김구름 회원님</h3>
-                <p className="text-sm text-gray-600">마일리지: 0P</p>
+                <h3 className="font-bold text-lg">
+                  {isLoggedIn && loginInfo ? `${loginInfo.username} 회원님` : '게스트 님'}
+                </h3>
+                <p className="text-sm text-gray-600">마일리지: 10,000P</p>
               </CardContent>
             </Card>
 
@@ -550,7 +611,6 @@ export default function PaymentHistoryPage() {
                                 size="sm"
                                 onClick={() => {
                                   // 결제 상세 정보 조회 로직 추가 예정
-                                  console.log('결제 상세 조회:', payment.paymentId);
                                 }}
                               >
                                 <Eye className="h-4 w-4 mr-1" />

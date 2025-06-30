@@ -33,8 +33,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   const handleMemberLogin = async () => {
-    console.log("회원번호 로그인 시도:", memberNumber, password)
-    
     if (!memberNumber || !password) {
       alert("회원번호와 비밀번호를 모두 입력해주세요.")
       return
@@ -42,13 +40,10 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      console.log("API 요청 전 - 회원번호:", memberNumber)
       const response = await apiClient.post("/auth/login", {
         memberNo: memberNumber,
         password: password,
       })
-
-      console.log("로그인 응답:", response.data)
 
       if (response.data.result) {
         const { accessToken, refreshToken } = response.data.result
@@ -57,11 +52,9 @@ export default function LoginPage() {
         localStorage.setItem("accessToken", accessToken)
         localStorage.setItem("refreshToken", refreshToken)
         
-        console.log("로그인 성공! 홈으로 이동합니다.")
         router.push("/") // 홈으로 이동
       }
     } catch (error: any) {
-      console.error("로그인 실패:", error)
       if (error.response?.data?.message) {
         alert(`로그인 실패: ${error.response.data.message}`)
       } else {
@@ -73,8 +66,6 @@ export default function LoginPage() {
   }
 
   const handleEmailLogin = async () => {
-    console.log("이메일 로그인 시도:", email, password)
-    
     if (!email || !password) {
       alert("이메일과 비밀번호를 모두 입력해주세요.")
       return
@@ -82,13 +73,10 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      console.log("API 요청 전 - 이메일:", email)
       const response = await apiClient.post("/auth/login/email", {
         email: email,
         password: password,
       })
-
-      console.log("로그인 응답:", response.data)
 
       if (response.data.result) {
         const { accessToken, refreshToken } = response.data.result
@@ -97,11 +85,9 @@ export default function LoginPage() {
         localStorage.setItem("accessToken", accessToken)
         localStorage.setItem("refreshToken", refreshToken)
         
-        console.log("로그인 성공! 홈으로 이동합니다.")
         router.push("/") // 홈으로 이동
       }
     } catch (error: any) {
-      console.error("로그인 실패:", error)
       if (error.response?.data?.message) {
         alert(`로그인 실패: ${error.response.data.message}`)
       } else {
@@ -113,8 +99,6 @@ export default function LoginPage() {
   }
 
   const handlePhoneLogin = async () => {
-    console.log("휴대폰 로그인 시도:", phoneNumber, password)
-    
     if (!phoneNumber || !password) {
       alert("휴대폰 번호와 비밀번호를 모두 입력해주세요.")
       return
@@ -122,17 +106,13 @@ export default function LoginPage() {
 
     // 휴대폰 번호에서 하이픈 제거
     const cleanPhoneNumber = phoneNumber.replace(/[^0-9]/g, "")
-    console.log("정리된 휴대폰 번호:", cleanPhoneNumber)
 
     setLoading(true)
     try {
-      console.log("API 요청 전 - 휴대폰:", cleanPhoneNumber)
       const response = await apiClient.post("/auth/login/phone", {
         phoneNumber: cleanPhoneNumber,
         password: password,
       })
-
-      console.log("로그인 응답:", response.data)
 
       if (response.data.result) {
         const { accessToken, refreshToken } = response.data.result
@@ -141,11 +121,9 @@ export default function LoginPage() {
         localStorage.setItem("accessToken", accessToken)
         localStorage.setItem("refreshToken", refreshToken)
         
-        console.log("로그인 성공! 홈으로 이동합니다.")
         router.push("/") // 홈으로 이동
       }
     } catch (error: any) {
-      console.error("로그인 실패:", error)
       if (error.response?.data?.message) {
         alert(`로그인 실패: ${error.response.data.message}`)
       } else {
@@ -157,24 +135,20 @@ export default function LoginPage() {
   }
 
   const handleGuestBookingClick = () => {
-    console.log("비회원 예매 클릭")
     setShowGuestDialog(true)
   }
 
   const handleGuestBookingConfirm = () => {
-    console.log("비회원 예매 이동")
     setShowGuestDialog(false)
     // 비회원 예매 페이지로 이동하되 guest 파라미터 추가
     router.push("/ticket/booking?guest=true")
   }
 
   const handleKakaoLogin = () => {
-    console.log("카카오 로그인 시도")
     alert("카카오 로그인은 현재 준비 중입니다.")
   }
 
   const handleAppleLogin = () => {
-    console.log("애플 로그인 시도")
     alert("애플 로그인은 현재 준비 중입니다.")
   }
 

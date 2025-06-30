@@ -34,7 +34,8 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react"
-import { savedPaymentMethodApi } from "@/lib/api/client"
+import { savedPaymentMethodApi, mileageApi } from "@/lib/api/client"
+import { getLoginInfo, isTokenExpired } from "@/lib/utils"
 
 interface SavedPaymentMethod {
   id: number;
@@ -67,16 +68,24 @@ export default function SavedPaymentMethodsPage() {
     memberInfoManagement: false,
   })
 
+  // 로그인 상태 관리
+  const [loginInfo, setLoginInfo] = useState<any>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userMileage, setUserMileage] = useState(0)
+
   const [savedMethods, setSavedMethods] = useState<SavedPaymentMethodsResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [newMethodType, setNewMethodType] = useState<'CREDIT_CARD' | 'BANK_ACCOUNT'>('CREDIT_CARD')
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
-  // 새 결제 수단 폼 데이터
+  // 새 결제 수단 폼 데이터 (카드번호 4자리씩 분할)
   const [newMethodForm, setNewMethodForm] = useState({
     alias: '',
-    cardNumber: '',
+    cardNumber1: '',
+    cardNumber2: '',
+    cardNumber3: '',
+    cardNumber4: '',
     cardExpiryMonth: '',
     cardExpiryYear: '',
     cardHolderName: '',
@@ -91,42 +100,111 @@ export default function SavedPaymentMethodsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showCvc, setShowCvc] = useState(false)
 
+  // 로그인 정보 확인
+  useEffect(() => {
+    const checkLoginStatus = () => {
+      // 강제로 개발용 토큰 설정
+      const devToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJURVNUMDAxIiwiaWF0IjoxNzM1MzAzNzMzLCJleHAiOjk5OTk5OTk5OTksInVzZXJJZCI6IjEiLCJ1c2VybmFtZSI6IlRFU1QwMDEifQ.test'
+      localStorage.setItem('accessToken', devToken)
+      
+      // 개발용 로그인 정보 설정
+      const mockLoginInfo = {
+        isLoggedIn: true,
+        userId: 1,
+        username: 'TEST001',
+        memberNo: 'RAILLO000001',
+        email: 'test001@example.com',
+        exp: 99999999999
+      }
+      
+      setLoginInfo(mockLoginInfo)
+      setIsLoggedIn(true)
+      
+      // 마일리지 및 저장된 결제수단 조회
+      fetchUserMileage(1)
+      fetchSavedPaymentMethods(1)
+    }
+    
+    checkLoginStatus()
+  }, [])
+
+  // 사용자 마일리지 조회
+  const fetchUserMileage = async (userId: number) => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      
+      const response = await fetch(`http://localhost:8080/api/v1/mileage/balance/${userId}/simple`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        // API 응답 구조: { message: "...", result: { currentBalance: 10000, ... } }
+        const mileageAmount = data.result?.currentBalance || data.currentBalance || 0
+        setUserMileage(mileageAmount)
+      } else {
+        const errorText = await response.text()
+        console.error('❌ 마일리지 조회 실패:', response.status, response.statusText, errorText)
+        setUserMileage(0)
+      }
+    } catch (error) {
+      console.error('❌ 마일리지 조회 에러:', error)
+      setUserMileage(0)
+    }
+  }
+
+  // 저장된 결제수단 조회
+  const fetchSavedPaymentMethods = async (userId: number) => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      
+      const response = await fetch(`http://localhost:8080/api/v1/saved-payment-methods?memberId=${userId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        // 신용카드와 계좌 분리
+        const creditCards = data.filter((item: any) => item.paymentMethodType === 'CREDIT_CARD')
+        const bankAccounts = data.filter((item: any) => item.paymentMethodType === 'BANK_ACCOUNT')
+        
+        setSavedMethods({
+          savedPaymentMethods: creditCards.concat(bankAccounts),
+          totalCount: creditCards.length + bankAccounts.length,
+        })
+      } else {
+        const errorText = await response.text()
+        console.error('❌ 저장된 결제수단 조회 실패:', response.status, response.statusText, errorText)
+        setSavedMethods({
+          savedPaymentMethods: [],
+          totalCount: 0,
+        })
+      }
+    } catch (error) {
+      console.error('❌ 저장된 결제수단 조회 에러:', error)
+      setSavedMethods({
+        savedPaymentMethods: [],
+        totalCount: 0,
+      })
+    }
+  }
+
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({
       ...prev,
       [section]: !prev[section],
     }))
   }
-
-  // 저장된 결제 수단 조회
-  const fetchSavedPaymentMethods = async () => {
-    setLoading(true)
-    try {
-      // 임시로 memberId를 1로 설정 (실제로는 로그인된 사용자 정보에서 가져와야 함)
-      const memberId = 1;
-      
-      const response = await savedPaymentMethodApi.getSavedPaymentMethods(memberId);
-      
-      // 백엔드에서 배열로 직접 반환하므로 구조 변경
-      setSavedMethods({
-        savedPaymentMethods: Array.isArray(response) ? response : [],
-        totalCount: Array.isArray(response) ? response.length : 0,
-      });
-    } catch (error) {
-      console.error('저장된 결제 수단 조회 실패:', error);
-      setSavedMethods({
-        savedPaymentMethods: [],
-        totalCount: 0,
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // 컴포넌트 마운트 시 데이터 조회
-  useEffect(() => {
-    fetchSavedPaymentMethods();
-  }, []);
 
   // 알림 자동 닫기
   useEffect(() => {
@@ -138,18 +216,46 @@ export default function SavedPaymentMethodsPage() {
     }
   }, [alert]);
 
+  // 카드번호 입력 처리 (4자리씩 자동 이동)
+  const handleCardNumberChange = (index: number, value: string) => {
+    const numericValue = value.replace(/\D/g, '').slice(0, 4);
+    const fieldNames = ['cardNumber1', 'cardNumber2', 'cardNumber3', 'cardNumber4'];
+    
+    setNewMethodForm(prev => ({
+      ...prev,
+      [fieldNames[index]]: numericValue
+    }));
+
+    // 4자리 입력 완료 시 다음 필드로 자동 포커스
+    if (numericValue.length === 4 && index < 3) {
+      const nextInput = document.getElementById(`cardNumber${index + 2}`);
+      nextInput?.focus();
+    }
+  }
+
   // 결제 수단 저장
   const handleSavePaymentMethod = async () => {
     setAlert(null)
     try {
-      const memberId = 1; // 임시 memberId
+      if (!isLoggedIn || !loginInfo) {
+        setAlert({ type: 'error', message: '로그인이 필요합니다.' });
+        return;
+      }
 
-      await savedPaymentMethodApi.savePaymentMethod({
-        memberId,
+      // userId 타입 확인 및 변환
+      const userId = typeof loginInfo.userId === 'string' ? parseInt(loginInfo.userId) : loginInfo.userId
+
+      // 카드번호 합치기
+      const fullCardNumber = newMethodType === 'CREDIT_CARD' 
+        ? `${newMethodForm.cardNumber1}${newMethodForm.cardNumber2}${newMethodForm.cardNumber3}${newMethodForm.cardNumber4}`
+        : '';
+
+      const requestData = {
+        memberId: userId,
         paymentMethodType: newMethodType,
         alias: newMethodForm.alias,
         ...(newMethodType === 'CREDIT_CARD' ? {
-          cardNumber: newMethodForm.cardNumber,
+          cardNumber: fullCardNumber,
           cardExpiryMonth: newMethodForm.cardExpiryMonth,
           cardExpiryYear: newMethodForm.cardExpiryYear,
           cardHolderName: newMethodForm.cardHolderName,
@@ -161,14 +267,18 @@ export default function SavedPaymentMethodsPage() {
           accountPassword: newMethodForm.accountPassword,
         }),
         isDefault: newMethodForm.isDefault,
-      });
+      };
+
+      const response = await savedPaymentMethodApi.savePaymentMethod(requestData);
 
       setAlert({ type: 'success', message: '결제 수단이 성공적으로 저장되었습니다.' });
       setIsDialogOpen(false);
       resetForm();
-      fetchSavedPaymentMethods();
+      
+      // 저장 후 즉시 목록 새로고침
+      await fetchSavedPaymentMethods(userId);
     } catch (error) {
-      console.error('결제 수단 저장 실패:', error);
+      console.error('❌ 결제 수단 저장 실패:', error);
       setAlert({ type: 'error', message: '결제 수단 저장에 실패했습니다.' });
     }
   }
@@ -180,7 +290,7 @@ export default function SavedPaymentMethodsPage() {
     try {
       await savedPaymentMethodApi.deletePaymentMethod(methodId);
       setAlert({ type: 'success', message: '결제 수단이 삭제되었습니다.' });
-      fetchSavedPaymentMethods();
+      fetchSavedPaymentMethods(typeof loginInfo.userId === 'string' ? parseInt(loginInfo.userId) : loginInfo.userId);
     } catch (error) {
       console.error('결제 수단 삭제 실패:', error);
       setAlert({ type: 'error', message: '결제 수단 삭제에 실패했습니다.' });
@@ -190,10 +300,14 @@ export default function SavedPaymentMethodsPage() {
   // 기본 결제 수단 설정
   const handleSetDefaultPaymentMethod = async (methodId: number) => {
     try {
-      const memberId = 1; // 임시 memberId
-      await savedPaymentMethodApi.setDefaultPaymentMethod(methodId, memberId);
+      if (!isLoggedIn || !loginInfo) {
+        setAlert({ type: 'error', message: '로그인이 필요합니다.' });
+        return;
+      }
+
+      await savedPaymentMethodApi.setDefaultPaymentMethod(methodId, loginInfo.userId);
       setAlert({ type: 'success', message: '기본 결제 수단이 설정되었습니다.' });
-      fetchSavedPaymentMethods();
+      fetchSavedPaymentMethods(typeof loginInfo.userId === 'string' ? parseInt(loginInfo.userId) : loginInfo.userId);
     } catch (error) {
       console.error('기본 결제 수단 설정 실패:', error);
       setAlert({ type: 'error', message: '기본 결제 수단 설정에 실패했습니다.' });
@@ -204,7 +318,10 @@ export default function SavedPaymentMethodsPage() {
   const resetForm = () => {
     setNewMethodForm({
       alias: '',
-      cardNumber: '',
+      cardNumber1: '',
+      cardNumber2: '',
+      cardNumber3: '',
+      cardNumber4: '',
       cardExpiryMonth: '',
       cardExpiryYear: '',
       cardHolderName: '',
@@ -314,8 +431,15 @@ export default function SavedPaymentMethodsPage() {
                     비즈니스
                   </Badge>
                 </div>
-                <h3 className="font-bold text-lg">김구름 회원님</h3>
-                <p className="text-sm text-gray-600">마일리지: 0P</p>
+                <h3 className="font-bold text-lg">
+                  {isLoggedIn && loginInfo ? loginInfo.username + ' 회원님' : '게스트 님'}
+                </h3>
+                <p className="text-sm text-gray-600">마일리지: {userMileage.toLocaleString()}P</p>
+                {isLoggedIn && loginInfo && (
+                  <p className="text-xs text-gray-500">
+                    멤버십 번호: RAILLO{loginInfo.userId.toString().padStart(6, '0')}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -520,24 +644,55 @@ export default function SavedPaymentMethodsPage() {
                     {/* 신용카드 필드 */}
                     {newMethodType === 'CREDIT_CARD' && (
                       <>
-                        <div>
-                          <Label htmlFor="cardNumber">카드 번호</Label>
-                          <Input
-                            id="cardNumber"
-                            value={newMethodForm.cardNumber}
-                            onChange={(e) => setNewMethodForm(prev => ({ ...prev, cardNumber: e.target.value }))}
-                            placeholder="1234-5678-9012-3456"
-                          />
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <Label htmlFor="cardNumber1">카드번호</Label>
+                            <Input
+                              id="cardNumber1"
+                              type="text"
+                              value={newMethodForm.cardNumber1}
+                              onChange={(e) => handleCardNumberChange(0, e.target.value)}
+                              maxLength={4}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="cardNumber2" className="sr-only">카드번호 2</Label>
+                            <Input
+                              id="cardNumber2"
+                              type="text"
+                              value={newMethodForm.cardNumber2}
+                              onChange={(e) => handleCardNumberChange(1, e.target.value)}
+                              maxLength={4}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="cardNumber3" className="sr-only">카드번호 3</Label>
+                            <Input
+                              id="cardNumber3"
+                              type="text"
+                              value={newMethodForm.cardNumber3}
+                              onChange={(e) => handleCardNumberChange(2, e.target.value)}
+                              maxLength={4}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="cardNumber4" className="sr-only">카드번호 4</Label>
+                            <Input
+                              id="cardNumber4"
+                              type="text"
+                              value={newMethodForm.cardNumber4}
+                              onChange={(e) => handleCardNumberChange(3, e.target.value)}
+                              maxLength={4}
+                            />
+                          </div>
                         </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label htmlFor="cardExpiryMonth">만료월</Label>
-                            <Select
-                              value={newMethodForm.cardExpiryMonth}
-                              onValueChange={(value) => setNewMethodForm(prev => ({ ...prev, cardExpiryMonth: value }))}
-                            >
+                            <Label htmlFor="cardExpiryMonth">유효기간 (월)</Label>
+                            <Select value={newMethodForm.cardExpiryMonth} onValueChange={(value) => setNewMethodForm(prev => ({ ...prev, cardExpiryMonth: value }))}>
                               <SelectTrigger>
-                                <SelectValue placeholder="월" />
+                                <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 {Array.from({ length: 12 }, (_, i) => (
@@ -549,13 +704,10 @@ export default function SavedPaymentMethodsPage() {
                             </Select>
                           </div>
                           <div>
-                            <Label htmlFor="cardExpiryYear">만료년</Label>
-                            <Select
-                              value={newMethodForm.cardExpiryYear}
-                              onValueChange={(value) => setNewMethodForm(prev => ({ ...prev, cardExpiryYear: value }))}
-                            >
+                            <Label htmlFor="cardExpiryYear">유효기간 (년)</Label>
+                            <Select value={newMethodForm.cardExpiryYear} onValueChange={(value) => setNewMethodForm(prev => ({ ...prev, cardExpiryYear: value }))}>
                               <SelectTrigger>
-                                <SelectValue placeholder="년" />
+                                <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 {Array.from({ length: 10 }, (_, i) => {
@@ -570,30 +722,35 @@ export default function SavedPaymentMethodsPage() {
                             </Select>
                           </div>
                         </div>
+
                         <div>
                           <Label htmlFor="cardHolderName">카드 소유자명</Label>
                           <Input
                             id="cardHolderName"
+                            type="text"
                             value={newMethodForm.cardHolderName}
                             onChange={(e) => setNewMethodForm(prev => ({ ...prev, cardHolderName: e.target.value }))}
-                            placeholder="홍길동"
                           />
                         </div>
+
                         <div>
                           <Label htmlFor="cardCvc">CVC</Label>
                           <div className="relative">
                             <Input
+                              id="cardCvc"
                               type={showCvc ? "text" : "password"}
                               value={newMethodForm.cardCvc}
-                              onChange={(e) => setNewMethodForm(prev => ({ ...prev, cardCvc: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, '').slice(0, 3);
+                                setNewMethodForm(prev => ({ ...prev, cardCvc: value }));
+                              }}
                               maxLength={3}
-                              placeholder="123"
                             />
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
                               onClick={() => setShowCvc(!showCvc)}
                             >
                               {showCvc ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -625,39 +782,44 @@ export default function SavedPaymentMethodsPage() {
                           </Select>
                         </div>
                         <div>
-                          <Label htmlFor="accountNumber">계좌 번호</Label>
+                          <Label htmlFor="accountNumber">계좌번호</Label>
                           <Input
                             id="accountNumber"
+                            type="text"
                             value={newMethodForm.accountNumber}
-                            onChange={(e) => setNewMethodForm(prev => ({ ...prev, accountNumber: e.target.value }))}
-                            placeholder="123-456-789012"
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              setNewMethodForm(prev => ({ ...prev, accountNumber: value }));
+                            }}
                           />
                         </div>
                         <div>
                           <Label htmlFor="accountHolderName">예금주명</Label>
                           <Input
                             id="accountHolderName"
+                            type="text"
                             value={newMethodForm.accountHolderName}
                             onChange={(e) => setNewMethodForm(prev => ({ ...prev, accountHolderName: e.target.value }))}
-                            placeholder="홍길동"
                           />
                         </div>
                         <div>
-                          <Label htmlFor="accountPassword">계좌 비밀번호</Label>
+                          <Label htmlFor="accountPassword">계좌 비밀번호 (앞 2자리)</Label>
                           <div className="relative">
                             <Input
                               id="accountPassword"
                               type={showPassword ? "text" : "password"}
                               value={newMethodForm.accountPassword}
-                              onChange={(e) => setNewMethodForm(prev => ({ ...prev, accountPassword: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
-                              maxLength={4}
-                              placeholder="4자리 숫자"
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, '').slice(0, 2);
+                                setNewMethodForm(prev => ({ ...prev, accountPassword: value }));
+                              }}
+                              maxLength={2}
                             />
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
                               onClick={() => setShowPassword(!showPassword)}
                             >
                               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

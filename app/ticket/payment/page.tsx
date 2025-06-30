@@ -15,7 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Train, ChevronLeft, ArrowRight, AlertTriangle, ChevronDown, CheckCircle } from "lucide-react"
-import apiClient, { savedPaymentMethodApi } from "@/lib/api/client"
+import apiClient, { savedPaymentMethodApi, mileageApi } from "@/lib/api/client"
+import { getLoginInfo, isTokenExpired } from "@/lib/utils"
 
 interface PaymentInfo {
   trainType: string
@@ -59,6 +60,10 @@ interface SavedPaymentMethod {
 export default function PaymentPage() {
   const router = useRouter()
   
+  // 로그인 정보 상태
+  const [loginInfo, setLoginInfo] = useState<any>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  
   // 결제 방식 상태
   const [paymentMethod, setPaymentMethod] = useState("simple")
   const [simplePaymentType, setSimplePaymentType] = useState("KAKAO_PAY")
@@ -83,6 +88,8 @@ export default function PaymentPage() {
     if (newTab === "simple") {
       // 간편결제 초기화
       setSimplePaymentType("KAKAO_PAY")
+      setSimplePhonePrefix("010")
+      setSimplePhoneNumber("")
     } else if (newTab === "card") {
       // 신용카드 필드 초기화
       setUseSavedCard(false)
@@ -114,6 +121,8 @@ export default function PaymentPage() {
       // 계좌이체 필드 초기화
       setSelectedBankForTransfer('')
       setIsDepositCompleted(false)
+      setTransferPhonePrefix("010")
+      setTransferPhoneNumber("")
     }
   }
   
@@ -147,7 +156,7 @@ export default function PaymentPage() {
   const [isDepositCompleted, setIsDepositCompleted] = useState(false)
   
   // 예약 정보
-  const paymentInfo: PaymentInfo = {
+  const reservationInfo: PaymentInfo = {
     trainType: "무궁화호",
     trainNumber: "1304",
     date: "2025년 06월 02일(월)",
@@ -166,13 +175,17 @@ export default function PaymentPage() {
   const [mileageToUse, setMileageToUse] = useState(0)
   const [availableMileage, setAvailableMileage] = useState(0)
   const [maxUsableMileage, setMaxUsableMileage] = useState(0)
-  const [finalPayableAmount, setFinalPayableAmount] = useState(paymentInfo.price)
+  const [finalPayableAmount, setFinalPayableAmount] = useState(reservationInfo.price)
   
-  // 휴대폰 번호 상태 - 결제수단별 분리
+  // 휴대폰 번호 상태 - 결제수단별 완전 분리
   const [cardPhoneNumber, setCardPhoneNumber] = useState("")
   const [cardPhonePrefix, setCardPhonePrefix] = useState("010")
   const [bankPhoneNumber, setBankPhoneNumber] = useState("")
   const [bankPhonePrefix, setBankPhonePrefix] = useState("010")
+  const [simplePhoneNumber, setSimplePhoneNumber] = useState("") // 간편결제용 추가
+  const [simplePhonePrefix, setSimplePhonePrefix] = useState("010") // 간편결제용 추가
+  const [transferPhoneNumber, setTransferPhoneNumber] = useState("") // 계좌이체용 추가
+  const [transferPhonePrefix, setTransferPhonePrefix] = useState("010") // 계좌이체용 추가
   
   // 현금영수증 휴대폰 번호 상태
   const [receiptPhoneNumber, setReceiptPhoneNumber] = useState("")
@@ -239,24 +252,34 @@ export default function PaymentPage() {
   // 저장된 결제 수단 조회
   const fetchSavedPaymentMethods = async () => {
     try {
-      const memberId = 1; // 임시 memberId (실제로는 로그인된 사용자 정보에서 가져와야 함)
-      const response = await savedPaymentMethodApi.getSavedPaymentMethods(memberId);
-      console.log('💳 저장된 결제수단 응답:', response);
+      const token = localStorage.getItem('accessToken')
       
-      // 백엔드에서 배열을 직접 반환하므로 response 자체를 사용
-      const methods = Array.isArray(response) ? response : (response.savedPaymentMethods || []);
-      setSavedPaymentMethods(methods);
-      console.log('💳 설정된 저장된 결제수단:', methods);
+      const response = await fetch(`http://localhost:8080/api/v1/saved-payment-methods?memberId=1`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setSavedPaymentMethods(data)
+      } else {
+        const errorText = await response.text()
+        console.error('❌ 저장된 결제수단 조회 실패:', response.status, response.statusText, errorText)
+        setSavedPaymentMethods([])
+      }
     } catch (error) {
-      console.error('❌ 저장된 결제 수단 조회 실패:', error);
-      setSavedPaymentMethods([]);
+      console.error('❌ 저장된 결제수단 조회 에러:', error)
+      setSavedPaymentMethods([])
     }
   }
 
   // 마일리지 계산 함수
   const calculateFinalAmount = (usedMileage: number) => {
     const discountAmount = usedMileage; // 1마일리지 = 1원
-    const finalAmount = Math.max(0, paymentInfo.price - discountAmount);
+    const finalAmount = Math.max(0, reservationInfo.price - discountAmount);
     setFinalPayableAmount(finalAmount);
     return finalAmount;
   }
@@ -269,8 +292,8 @@ export default function PaymentPage() {
       return;
     }
     
-    // 앞자리 0 제거하고 숫자만 허용
-    const cleanValue = value.replace(/^0+/, '') || '';
+    // 숫자가 아닌 문자(-, +, e 등) 제거하고 양수만 허용
+    const cleanValue = value.replace(/[^0-9]/g, '').replace(/^0+/, '') || '';
     if (cleanValue === '') {
       setMileageToUse(0);
       calculateFinalAmount(0);
@@ -278,46 +301,158 @@ export default function PaymentPage() {
     }
     
     const numValue = parseInt(cleanValue) || 0;
-    const clampedValue = Math.min(numValue, Math.min(availableMileage, maxUsableMileage));
-    setMileageToUse(clampedValue);
-    calculateFinalAmount(clampedValue);
-  }
-
-  // 마일리지 정보 조회
-  const fetchMileageInfo = async () => {
-    try {
-      // 임시로 하드코딩된 마일리지 정보 (실제로는 API 호출)
-      const userMileage = 15000; // 보유 마일리지
-      const maxUsable = Math.floor(paymentInfo.price * 0.3); // 최대 30% 사용 가능
-      
-      setAvailableMileage(userMileage);
-      setMaxUsableMileage(maxUsable);
-    } catch (error) {
-      console.error('마일리지 정보 조회 실패:', error);
+    
+    // 음수 방지 - 0보다 작으면 0으로 설정
+    if (numValue < 0) {
+      setMileageToUse(0);
+      calculateFinalAmount(0);
+      return;
+    }
+    
+    // 최대 사용 가능 마일리지 제한 (보유 마일리지와 최대 사용 가능 중 작은 값)
+    const maxAllowed = Math.min(availableMileage, maxUsableMileage);
+    const clampedValue = Math.min(numValue, maxAllowed);
+    
+    // 사용자가 최대값을 초과하려 할 때 경고 메시지
+    if (numValue > maxAllowed) {
+      console.warn(`마일리지 최대 사용량 초과: 요청=${numValue}, 최대=${maxAllowed}`);
+      // 자동으로 최대값으로 조정
+      setMileageToUse(maxAllowed);
+      calculateFinalAmount(maxAllowed);
+    } else {
+      setMileageToUse(clampedValue);
+      calculateFinalAmount(clampedValue);
     }
   }
 
-  // 컴포넌트 마운트 시 저장된 결제 수단 조회
+  // 로그인 정보 확인 및 설정
+  const checkLoginStatus = () => {
+    // 강제로 개발용 토큰 설정
+    const devToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJURVNUMDAxIiwiaWF0IjoxNzM1MzAzNzMzLCJleHAiOjk5OTk5OTk5OTksInVzZXJJZCI6IjEiLCJ1c2VybmFtZSI6IlRFU1QwMDEifQ.test'
+    localStorage.setItem('accessToken', devToken)
+
+    // 개발용 로그인 정보 설정
+    const mockLoginInfo = {
+      isLoggedIn: true,
+      userId: 1,
+      username: 'TEST001',
+      memberNo: 'RAILLO000001',
+      email: 'test001@example.com',
+      exp: 99999999999
+    }
+    
+    setLoginInfo(mockLoginInfo)
+    setIsLoggedIn(true)
+  }
+
+  // 마일리지 조회
+  const fetchMileageInfo = async () => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      
+      const response = await fetch(`http://localhost:8080/api/v1/mileage/balance/1/simple`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        // API 응답 구조: { message: "...", result: { currentBalance: 10000, activeBalance: 10000 } }
+        const currentBalance = data.result?.currentBalance || data.currentBalance || 0
+        const activeBalance = data.result?.activeBalance || data.activeBalance || 0
+        
+        const maxUsable30Percent = Math.floor(reservationInfo.price * 0.3)
+        const maxUsable = Math.floor(maxUsable30Percent / 100) * 100 // 100포인트 단위로 내림
+        
+        setAvailableMileage(currentBalance)
+        setMaxUsableMileage(Math.min(maxUsable, activeBalance))
+      } else {
+        const errorText = await response.text()
+        console.error('❌ 결제페이지 마일리지 조회 실패:', response.status, response.statusText, errorText)
+        setAvailableMileage(0)
+        setMaxUsableMileage(0)
+      }
+    } catch (error) {
+      console.error('❌ 결제페이지 마일리지 조회 에러:', error)
+      setAvailableMileage(0)
+      setMaxUsableMileage(0)
+    }
+  }
+
+  // 컴포넌트 마운트 시 로그인 상태 확인 및 데이터 조회
   useEffect(() => {
-    fetchSavedPaymentMethods();
-    fetchMileageInfo();
+    checkLoginStatus();
   }, []);
+
+  // 로그인 상태 변경 시 마일리지 조회
+  useEffect(() => {
+    if (isLoggedIn && loginInfo) {
+      fetchMileageInfo()
+      fetchSavedPaymentMethods()
+    }
+  }, [isLoggedIn, loginInfo])
 
   // 저장된 결제수단 상태 변경 감지
   useEffect(() => {
-    console.log('🔄 저장된 결제수단 상태 변경:', savedPaymentMethods);
-    console.log('📊 신용카드 개수:', savedPaymentMethods.filter(method => method.paymentMethodType === 'CREDIT_CARD').length);
-    console.log('🏦 통장 개수:', savedPaymentMethods.filter(method => method.paymentMethodType === 'BANK_ACCOUNT').length);
-  }, [savedPaymentMethods]);
+    if (savedPaymentMethods && savedPaymentMethods.length > 0) {
+      // 기본 결제수단이 있는지 확인하고 설정
+      const defaultMethod = savedPaymentMethods.find(method => method.isDefault)
+      if (defaultMethod) {
+        setPaymentMethod('saved')
+        if (defaultMethod.paymentMethodType === 'CREDIT_CARD') {
+          setSelectedSavedCard(defaultMethod.id.toString())
+        } else if (defaultMethod.paymentMethodType === 'BANK_ACCOUNT') {
+          setSelectedSavedAccount(defaultMethod.id.toString())
+        }
+      }
+    }
+  }, [savedPaymentMethods])
+
+  // 원본 결제수단 조회 (실제 카드번호 포함)
+  const fetchRawPaymentMethod = async (paymentMethodId: number) => {
+    try {
+      if (!isLoggedIn || !loginInfo) {
+        throw new Error('로그인이 필요합니다.')
+      }
+
+      const memberId = loginInfo.userId
+      const token = localStorage.getItem('accessToken')
+      
+      const response = await fetch(
+        `http://localhost:8080/api/v1/saved-payment-methods/${paymentMethodId}/raw?memberId=${memberId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+      
+      if (response.ok) {
+        const data = await response.json()
+        return data
+      } else {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+    } catch (error) {
+      console.error('원본 결제수단 조회 실패:', error)
+      throw error
+    }
+  }
 
   // 저장된 카드 선택 핸들러 (신용카드 탭 전용)
-  const handleSavedCardChange = (methodId: string) => {
+  const handleSavedCardChange = async (methodId: string) => {
     if (methodId === 'new') {
       // 새 카드 입력 선택
       setUseSavedCard(false);
       setSelectedSavedCard(null);
       
-      // 신용카드 필드 초기화
+      // 카드 필드 초기화
       setCardNumber1('');
       setCardNumber2('');
       setCardNumber3('');
@@ -335,18 +470,34 @@ export default function PaymentPage() {
       setUseSavedCard(true);
       setSelectedSavedCard(methodIdNum);
 
-      if (method.cardNumber) {
-        // 카드 번호를 4자리씩 분할하여 입력
-        const cardNumber = method.cardNumber.replace(/[^0-9]/g, '');
+      // 원본 데이터 조회
+      const rawMethod = await fetchRawPaymentMethod(methodIdNum);
+      
+      if (rawMethod && rawMethod.cardNumber) {
+        // 원본 카드 번호를 4자리씩 분할하여 입력
+        const cardNumber = rawMethod.cardNumber.replace(/[^0-9]/g, '');
         setCardNumber1(cardNumber.slice(0, 4));
         setCardNumber2(cardNumber.slice(4, 8));
         setCardNumber3(cardNumber.slice(8, 12));
         setCardNumber4(cardNumber.slice(12, 16));
-        setExpiryMonth(method.cardExpiryMonth || '');
-        setExpiryYear(method.cardExpiryYear || '2025');
+        setExpiryMonth(rawMethod.cardExpiryMonth || '');
+        setExpiryYear(rawMethod.cardExpiryYear || '2025');
         // 저장된 카드는 CVC와 비밀번호 재입력 불필요
         setCvv('123'); // 3자리 더미값으로 수정
         setCardPassword('1234'); // 더미값 설정
+      } else {
+        // 원본 조회 실패 시 마스킹된 데이터 사용
+        if (method.cardNumber) {
+          const cardNumber = method.cardNumber.replace(/[^0-9]/g, '');
+          setCardNumber1(cardNumber.slice(0, 4));
+          setCardNumber2(cardNumber.slice(4, 8));
+          setCardNumber3(cardNumber.slice(8, 12));
+          setCardNumber4(cardNumber.slice(12, 16));
+          setExpiryMonth(method.cardExpiryMonth || '');
+          setExpiryYear(method.cardExpiryYear || '2025');
+          setCvv('123');
+          setCardPassword('1234');
+        }
       }
     }
   };
@@ -479,6 +630,10 @@ export default function PaymentPage() {
       phoneToCheck = cardPhoneNumber
     } else if (paymentMethod === "bank") {
       phoneToCheck = bankPhoneNumber
+    } else if (paymentMethod === "simple") {
+      phoneToCheck = simplePhoneNumber
+    } else if (paymentMethod === "transfer") {
+      phoneToCheck = transferPhoneNumber
     } else {
       phoneToCheck = receiptPhoneNumber // 기본값으로 현금영수증 번호 사용
     }
@@ -538,7 +693,12 @@ export default function PaymentPage() {
   // 결제 수단 저장 함수
   const savePaymentMethod = async (paymentMethodType: string) => {
     try {
-      const memberId = 1; // 임시 memberId (실제로는 로그인된 사용자 정보에서 가져와야 함)
+      // 로그인 상태에서만 결제수단 저장 가능
+      if (!isLoggedIn || !loginInfo?.userId) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      const memberId = parseInt(loginInfo.userId);
       
       let requestData: any = {
         memberId,
@@ -584,10 +744,7 @@ export default function PaymentPage() {
         };
       }
 
-      console.log("💾 결제 수단 저장:", requestData);
-      
       const response = await savedPaymentMethodApi.savePaymentMethod(requestData);
-      console.log("✅ 결제 수단 저장 완료:", response);
       
       // 저장 후 목록 새로고침
       await fetchSavedPaymentMethods();
@@ -659,11 +816,14 @@ export default function PaymentPage() {
 
     try {
       // 1단계: 결제 계산 API 호출하여 calculationId 생성
-      console.log("📊 결제 계산 API 호출 시작...")
+      
+      // 로그인 상태에 따른 userId 설정
+      const currentUserId = isLoggedIn && loginInfo?.userId ? loginInfo.userId : "guest_user"
+      
       const calculationData = {
-        externalOrderId: paymentInfo.reservationNumber,
-        userId: "guest_user",
-        originalAmount: paymentInfo.price,
+        externalOrderId: reservationInfo.reservationNumber,
+        userId: currentUserId,
+        originalAmount: reservationInfo.price,
         mileageToUse: mileageToUse,
         availableMileage: availableMileage,
         requestedPromotions: []
@@ -686,26 +846,27 @@ export default function PaymentPage() {
       }
 
       const paymentData = {
-        merchantOrderId: paymentInfo.reservationNumber,
+        merchantOrderId: reservationInfo.reservationNumber,
         amount: finalPayableAmount, // 마일리지 할인이 적용된 최종 금액 사용
         paymentMethod: backendPaymentMethod,
-        productName: `${paymentInfo.trainType} ${paymentInfo.trainNumber} (${paymentInfo.departureStation}→${paymentInfo.arrivalStation})`,
+        productName: `${reservationInfo.trainType} ${reservationInfo.trainNumber} (${reservationInfo.departureStation}→${reservationInfo.arrivalStation})`,
         buyerName: "결제자",
         buyerEmail: "test@example.com",
         buyerPhone: paymentMethod === "card" ? `${cardPhonePrefix}${cardPhoneNumber}` : 
                     paymentMethod === "bank" ? `${bankPhonePrefix}${bankPhoneNumber}` :
+                    paymentMethod === "simple" ? `${simplePhonePrefix}${simplePhoneNumber}` :
+                    paymentMethod === "transfer" ? `${transferPhonePrefix}${transferPhoneNumber}` :
                     `${receiptPhonePrefix}${receiptPhoneNumber}`,
         successUrl: `${window.location.origin}/ticket/payment/success`,
         failUrl: `${window.location.origin}/ticket/payment/fail`,
         cancelUrl: `${window.location.origin}/ticket/payment/fail`,
-        calculationId: calculationId
+        calculationId: calculationId,
+        // 로그인된 회원 정보 추가
+        memberId: isLoggedIn && loginInfo?.userId ? parseInt(loginInfo.userId.toString()) : null
       }
-
-      console.log("📤 PG 결제 요청:", paymentData)
 
       // PG 결제 요청
       const response = await apiClient.post("/api/v1/payments/pg/request", paymentData)
-      console.log("📥 PG 응답:", response.data)
 
       if (response.data?.result?.paymentUrl) {
         window.location.href = response.data.result.paymentUrl
@@ -714,29 +875,39 @@ export default function PaymentPage() {
         const approveResponse = await apiClient.post("/api/v1/payments/pg/approve", {
           paymentMethod: backendPaymentMethod,
           pgTransactionId: response.data?.result?.pgTransactionId || "MOCK_TID_" + Date.now(),
-          merchantOrderId: paymentInfo.reservationNumber,
+          merchantOrderId: reservationInfo.reservationNumber,
           calculationId: calculationId,
           buyerName: "결제자",
           buyerEmail: "test@example.com",
           buyerPhone: paymentMethod === "card" ? `${cardPhonePrefix}${cardPhoneNumber}` : 
                       paymentMethod === "bank" ? `${bankPhonePrefix}${bankPhoneNumber}` :
-                      `${receiptPhonePrefix}${receiptPhoneNumber}`
+                      paymentMethod === "simple" ? `${simplePhonePrefix}${simplePhoneNumber}` :
+                      paymentMethod === "transfer" ? `${transferPhonePrefix}${transferPhoneNumber}` :
+                      `${receiptPhonePrefix}${receiptPhoneNumber}`,
+          // 현금영수증 정보 추가
+          requestReceipt: requestReceipt,
+          receiptType: receiptType,
+          receiptPhoneNumber: receiptType === "personal" ? `${receiptPhonePrefix}${receiptPhoneNumber}` : null,
+          businessNumber: receiptType === "business" ? businessNumber : null,
+          // 로그인된 회원 정보 추가
+          memberId: isLoggedIn && loginInfo?.userId ? parseInt(loginInfo.userId.toString()) : null
         })
-        
-        console.log("✅ 결제 승인 완료:", approveResponse.data)
         
         // 결제 수단 저장 처리 (저장된 결제수단을 사용하지 않은 경우에만)
         if (agreeSavePayment && !useSavedCard && !useSavedAccount) {
           try {
             await savePaymentMethod(backendPaymentMethod)
+            
+            // 저장 후 목록 새로고침
+            await fetchSavedPaymentMethods()
           } catch (error) {
-            console.warn("결제 수단 저장 실패:", error)
+            console.warn("⚠️ 결제 수단 저장 실패:", error)
             // 결제는 성공했으므로 저장 실패는 경고만 표시
           }
         }
         
         alert(`결제가 완료되었습니다!`)
-        router.push(`/ticket/payment-complete?reservationId=${paymentInfo.reservationNumber}`)
+        router.push(`/ticket/payment-complete?reservationId=${reservationInfo.reservationNumber}`)
       }
     } catch (error: any) {
       console.error("❌ 결제 실패:", error)
@@ -793,39 +964,39 @@ export default function PaymentPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Badge className={getTrainTypeColor(paymentInfo.trainType)}>
-                    {paymentInfo.trainType} {paymentInfo.trainNumber}
+                  <Badge className={getTrainTypeColor(reservationInfo.trainType)}>
+                    {reservationInfo.trainType} {reservationInfo.trainNumber}
                   </Badge>
-                  <span className="text-sm text-gray-600">{paymentInfo.date}</span>
+                  <span className="text-sm text-gray-600">{reservationInfo.date}</span>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-medium">{paymentInfo.departureStation}</div>
-                    <div className="text-sm text-gray-600">{paymentInfo.departureTime}</div>
+                    <div className="font-medium">{reservationInfo.departureStation}</div>
+                    <div className="text-sm text-gray-600">{reservationInfo.departureTime}</div>
                   </div>
                   <ArrowRight className="h-4 w-4 text-gray-400" />
                   <div className="text-right">
-                    <div className="font-medium">{paymentInfo.arrivalStation}</div>
-                    <div className="text-sm text-gray-600">{paymentInfo.arrivalTime}</div>
+                    <div className="font-medium">{reservationInfo.arrivalStation}</div>
+                    <div className="text-sm text-gray-600">{reservationInfo.arrivalTime}</div>
                   </div>
                 </div>
 
                 <div className="border-t pt-4">
                   <div className="flex justify-between text-sm">
                     <span>좌석</span>
-                    <span>{paymentInfo.seatClass} {paymentInfo.carNumber}호차 {paymentInfo.seatNumber}번</span>
+                    <span>{reservationInfo.seatClass} {reservationInfo.carNumber}호차 {reservationInfo.seatNumber}번</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>예약번호</span>
-                    <span>{paymentInfo.reservationNumber}</span>
+                    <span>{reservationInfo.reservationNumber}</span>
                   </div>
                 </div>
 
                 <div className="border-t pt-4">
                   <div className="flex justify-between font-bold text-lg">
                     <span>결제 금액</span>
-                    <span className="text-blue-600">{formatPrice(paymentInfo.price)}</span>
+                    <span className="text-blue-600">{formatPrice(reservationInfo.price)}</span>
                   </div>
                 </div>
               </CardContent>
@@ -878,6 +1049,33 @@ export default function PaymentPage() {
                         </Label>
                       </div>
                     </RadioGroup>
+
+                    {/* 간편결제 전용 휴대폰 번호 */}
+                    <div>
+                      <Label>휴대폰 번호 (인증용)</Label>
+                      <div className="flex gap-2 mt-2">
+                        <Select value={simplePhonePrefix} onValueChange={setSimplePhonePrefix}>
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="010">010</SelectItem>
+                            <SelectItem value="011">011</SelectItem>
+                            <SelectItem value="016">016</SelectItem>
+                            <SelectItem value="017">017</SelectItem>
+                            <SelectItem value="018">018</SelectItem>
+                            <SelectItem value="019">019</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          placeholder="12345678"
+                          value={simplePhoneNumber}
+                          onChange={(e) => setSimplePhoneNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
+                          className="flex-1"
+                        />
+                      </div>
+                      {errors.phoneNumber && <p className="text-red-500 text-sm mt-1">{errors.phoneNumber}</p>}
+                    </div>
                   </TabsContent>
 
                   {/* 신용카드 */}
@@ -1026,7 +1224,7 @@ export default function PaymentPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label>할부</Label>
-                        <Select value={installment} onValueChange={setInstallment} disabled={useSavedCard}>
+                        <Select value={installment} onValueChange={setInstallment}>
                           <SelectTrigger className="mt-2">
                             <SelectValue />
                           </SelectTrigger>
@@ -1053,6 +1251,33 @@ export default function PaymentPage() {
                         />
                         {errors.cardPassword && <p className="text-red-500 text-sm mt-1">{errors.cardPassword}</p>}
                       </div>
+                    </div>
+
+                    {/* 신용카드 전용 휴대폰 번호 */}
+                    <div>
+                      <Label>휴대폰 번호 (본인확인용)</Label>
+                      <div className="flex gap-2 mt-2">
+                        <Select value={cardPhonePrefix} onValueChange={setCardPhonePrefix}>
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="010">010</SelectItem>
+                            <SelectItem value="011">011</SelectItem>
+                            <SelectItem value="016">016</SelectItem>
+                            <SelectItem value="017">017</SelectItem>
+                            <SelectItem value="018">018</SelectItem>
+                            <SelectItem value="019">019</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          placeholder="12345678"
+                          value={cardPhoneNumber}
+                          onChange={(e) => setCardPhoneNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
+                          className="flex-1"
+                        />
+                      </div>
+                      {errors.phoneNumber && <p className="text-red-500 text-sm mt-1">{errors.phoneNumber}</p>}
                     </div>
                   </TabsContent>
 
@@ -1183,6 +1408,34 @@ export default function PaymentPage() {
                           {errors.bankPassword && <p className="text-red-500 text-sm mt-1">{errors.bankPassword}</p>}
                         </div>
 
+                        {/* 내 통장 전용 휴대폰 번호 */}
+                        <div>
+                          <Label>휴대폰 번호</Label>
+                          <div className="flex gap-2 mt-2">
+                            <Select value={bankPhonePrefix} onValueChange={setBankPhonePrefix} disabled={useSavedAccount}>
+                              <SelectTrigger className="w-24">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="010">010</SelectItem>
+                                <SelectItem value="011">011</SelectItem>
+                                <SelectItem value="016">016</SelectItem>
+                                <SelectItem value="017">017</SelectItem>
+                                <SelectItem value="018">018</SelectItem>
+                                <SelectItem value="019">019</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              placeholder="12345678"
+                              value={bankPhoneNumber}
+                              onChange={(e) => setBankPhoneNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
+                              className="flex-1"
+                              disabled={useSavedAccount}
+                            />
+                          </div>
+                          {errors.phoneNumber && <p className="text-red-500 text-sm mt-1">{errors.phoneNumber}</p>}
+                        </div>
+
                         <Button 
                           onClick={handleAccountVerification}
                           disabled={isProcessing}
@@ -1246,7 +1499,7 @@ export default function PaymentPage() {
                                 <p><span className="font-medium">은행:</span> {selectedBank.bankName}</p>
                                 <p><span className="font-medium">계좌번호:</span> {selectedBank.accountNumber}</p>
                                 <p><span className="font-medium">예금주:</span> {selectedBank.accountHolder}</p>
-                                <p><span className="font-medium">입금금액:</span> <span className="text-red-600 font-bold">{formatPrice(paymentInfo.price)}</span></p>
+                                <p><span className="font-medium">입금금액:</span> <span className="text-red-600 font-bold">{formatPrice(reservationInfo.price)}</span></p>
                               </div>
                             </div>
                           ) : null
@@ -1267,36 +1520,36 @@ export default function PaymentPage() {
                       </div>
                     )}
 
+                    {/* 계좌이체 전용 휴대폰 번호 */}
+                    <div>
+                      <Label>휴대폰 번호 (입금자 확인용)</Label>
+                      <div className="flex gap-2 mt-2">
+                        <Select value={transferPhonePrefix} onValueChange={setTransferPhonePrefix}>
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="010">010</SelectItem>
+                            <SelectItem value="011">011</SelectItem>
+                            <SelectItem value="016">016</SelectItem>
+                            <SelectItem value="017">017</SelectItem>
+                            <SelectItem value="018">018</SelectItem>
+                            <SelectItem value="019">019</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          placeholder="12345678"
+                          value={transferPhoneNumber}
+                          onChange={(e) => setTransferPhoneNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
+                          className="flex-1"
+                        />
+                      </div>
+                      {errors.phoneNumber && <p className="text-red-500 text-sm mt-1">{errors.phoneNumber}</p>}
+                    </div>
+
                     {errors.transfer && <p className="text-red-500 text-sm">{errors.transfer}</p>}
                   </TabsContent>
                 </Tabs>
-
-                {/* 휴대폰 번호 */}
-                <div className="mt-6">
-                  <Label>휴대폰 번호</Label>
-                  <div className="flex gap-2 mt-2">
-                    <Select value={cardPhonePrefix} onValueChange={setCardPhonePrefix}>
-                      <SelectTrigger className="w-24">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="010">010</SelectItem>
-                        <SelectItem value="011">011</SelectItem>
-                        <SelectItem value="016">016</SelectItem>
-                        <SelectItem value="017">017</SelectItem>
-                        <SelectItem value="018">018</SelectItem>
-                        <SelectItem value="019">019</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      placeholder="12345678"
-                      value={cardPhoneNumber}
-                      onChange={(e) => setCardPhoneNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
-                      className="flex-1"
-                    />
-                  </div>
-                  {errors.phoneNumber && <p className="text-red-500 text-sm mt-1">{errors.phoneNumber}</p>}
-                </div>
 
                 {/* 마일리지 사용 */}
                 <div className="mt-6">
@@ -1314,6 +1567,7 @@ export default function PaymentPage() {
                         placeholder="사용할 마일리지 입력"
                         value={mileageToUse === 0 ? '' : mileageToUse}
                         onChange={(e) => handleMileageChange(e.target.value)}
+                        min="0"
                         max={Math.min(availableMileage, maxUsableMileage)}
                         className="flex-1"
                       />
@@ -1332,7 +1586,7 @@ export default function PaymentPage() {
                       <div className="bg-white p-3 rounded border">
                         <div className="flex justify-between text-sm">
                           <span>원래 금액:</span>
-                          <span>{formatPrice(paymentInfo.price)}</span>
+                          <span>{formatPrice(reservationInfo.price)}</span>
                         </div>
                         <div className="flex justify-between text-sm text-blue-600">
                           <span>마일리지 할인:</span>
@@ -1345,68 +1599,72 @@ export default function PaymentPage() {
                       </div>
                     )}
                     
-                    {/* 마일리지 사용 시 현금영수증 필수 */}
+                    {/* 마일리지 사용 시 현금영수증 선택적 신청 */}
                     {mileageToUse > 0 && (
                       <div className="bg-yellow-50 p-3 rounded-lg">
                         <div className="flex items-center space-x-2 mb-3">
                           <Checkbox 
                             id="mileageReceipt" 
-                            checked={true} 
-                            disabled={true}
+                            checked={requestReceipt} 
+                            onCheckedChange={(checked) => setRequestReceipt(checked === true)}
                           />
                           <Label htmlFor="mileageReceipt" className="text-sm font-medium">
-                            현금영수증 신청
+                            현금영수증 신청 (선택사항)
                           </Label>
                         </div>
                         
-                        <RadioGroup value={receiptType} onValueChange={setReceiptType} className="flex gap-4 mb-3">
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="personal" id="mileagePersonalReceipt" />
-                            <Label htmlFor="mileagePersonalReceipt">개인 소득공제</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="business" id="mileageBusinessReceipt" />
-                            <Label htmlFor="mileageBusinessReceipt">사업자 증빙</Label>
-                          </div>
-                        </RadioGroup>
-                        
-                        {receiptType === "personal" && (
-                          <div>
-                            <Label className="text-sm">휴대폰 번호</Label>
-                            <div className="flex gap-2 mt-1">
-                              <Select value={receiptPhonePrefix} onValueChange={setReceiptPhonePrefix}>
-                                <SelectTrigger className="w-20">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="010">010</SelectItem>
-                                  <SelectItem value="011">011</SelectItem>
-                                  <SelectItem value="016">016</SelectItem>
-                                  <SelectItem value="017">017</SelectItem>
-                                  <SelectItem value="018">018</SelectItem>
-                                  <SelectItem value="019">019</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Input
-                                placeholder="12345678"
-                                value={receiptPhoneNumber}
-                                onChange={(e) => setReceiptPhoneNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
-                                className="flex-1"
-                              />
-                            </div>
-                          </div>
-                        )}
-                        
-                        {receiptType === "business" && (
-                          <div>
-                            <Label className="text-sm">사업자등록번호</Label>
-                            <Input
-                              placeholder="000-00-00000"
-                              value={businessNumber}
-                              onChange={(e) => setBusinessNumber(e.target.value)}
-                              className="mt-1"
-                            />
-                          </div>
+                        {requestReceipt && (
+                          <>
+                            <RadioGroup value={receiptType} onValueChange={setReceiptType} className="flex gap-4 mb-3">
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="personal" id="mileagePersonalReceipt" />
+                                <Label htmlFor="mileagePersonalReceipt">개인 소득공제</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="business" id="mileageBusinessReceipt" />
+                                <Label htmlFor="mileageBusinessReceipt">사업자 증빙</Label>
+                              </div>
+                            </RadioGroup>
+                            
+                            {receiptType === "personal" && (
+                              <div>
+                                <Label className="text-sm">휴대폰 번호</Label>
+                                <div className="flex gap-2 mt-1">
+                                  <Select value={receiptPhonePrefix} onValueChange={setReceiptPhonePrefix}>
+                                    <SelectTrigger className="w-20">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="010">010</SelectItem>
+                                      <SelectItem value="011">011</SelectItem>
+                                      <SelectItem value="016">016</SelectItem>
+                                      <SelectItem value="017">017</SelectItem>
+                                      <SelectItem value="018">018</SelectItem>
+                                      <SelectItem value="019">019</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Input
+                                    placeholder="12345678"
+                                    value={receiptPhoneNumber}
+                                    onChange={(e) => setReceiptPhoneNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
+                                    className="flex-1"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            
+                            {receiptType === "business" && (
+                              <div>
+                                <Label className="text-sm">사업자등록번호</Label>
+                                <Input
+                                  placeholder="000-00-00000"
+                                  value={businessNumber}
+                                  onChange={(e) => setBusinessNumber(e.target.value)}
+                                  className="mt-1"
+                                />
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )}

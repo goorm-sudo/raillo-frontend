@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +22,8 @@ import {
   Lock,
   Award,
 } from "lucide-react"
+import { getLoginInfo, isTokenExpired } from "@/lib/utils"
+import { mileageApi } from "@/lib/api/client"
 
 export default function MyPage() {
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
@@ -31,12 +33,82 @@ export default function MyPage() {
     memberInfoManagement: false,
   })
 
+  // 로그인 정보 상태
+  const [loginInfo, setLoginInfo] = useState<any>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userMileage, setUserMileage] = useState(0)
+
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({
       ...prev,
       [section]: !prev[section],
     }))
   }
+
+  // 로그인 정보 확인
+  const checkLoginStatus = () => {
+    // 강제로 개발용 토큰 설정
+    const devToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJURVNUMDAxIiwiaWF0IjoxNzM1MzAzNzMzLCJleHAiOjk5OTk5OTk5OTksInVzZXJJZCI6IjEiLCJ1c2VybmFtZSI6IlRFU1QwMDEifQ.test'
+    localStorage.setItem('accessToken', devToken)
+
+    // 개발용 로그인 정보 설정
+    const mockLoginInfo = {
+      isLoggedIn: true,
+      userId: 1,
+      username: 'TEST001',
+      memberNo: 'RAILLO000001',
+      email: 'test001@example.com',
+      exp: 99999999999
+    }
+    
+    setLoginInfo(mockLoginInfo)
+    setIsLoggedIn(true)
+  }
+
+  // 마일리지 조회
+  const fetchUserMileage = async () => {
+    try {
+      if (!loginInfo?.userId) {
+        setUserMileage(0)
+        return
+      }
+
+      const userId = typeof loginInfo.userId === 'string' ? parseInt(loginInfo.userId) : loginInfo.userId
+      const token = localStorage.getItem('accessToken')
+
+      const response = await fetch(`http://localhost:8080/api/v1/mileage/balance/${userId}/simple`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        
+        // API 응답 구조: { message: "...", result: { currentBalance: 10000, ... } }
+        const mileageAmount = data.result?.currentBalance || data.currentBalance || 0
+        setUserMileage(mileageAmount)
+      } else {
+        console.error('마일리지 조회 실패:', response.status)
+        setUserMileage(0)
+      }
+    } catch (error) {
+      console.error('마일리지 조회 에러:', error)
+      setUserMileage(0)
+    }
+  }
+
+  useEffect(() => {
+    checkLoginStatus()
+  }, [])
+
+  useEffect(() => {
+    if (loginInfo) {
+      fetchUserMileage()
+    }
+  }, [loginInfo, isLoggedIn])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -90,8 +162,10 @@ export default function MyPage() {
                     비즈니스
                   </Badge>
                 </div>
-                <h3 className="font-bold text-lg">김구름 회원님</h3>
-                <p className="text-sm text-gray-600">마일리지: 0P</p>
+                <h3 className="font-bold text-lg">
+                  {isLoggedIn && loginInfo ? `${loginInfo.username} 회원님` : '게스트 님'}
+                </h3>
+                <p className="text-sm text-gray-600">마일리지: {userMileage.toLocaleString()}P</p>
               </CardContent>
             </Card>
 
@@ -263,7 +337,9 @@ export default function MyPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">회원명</div>
                     <div className="md:col-span-2">
-                      <span className="text-lg">김구름</span>
+                      <span className="text-lg">
+                        {isLoggedIn && loginInfo ? loginInfo.username : '로그인이 필요합니다'}
+                      </span>
                     </div>
                   </div>
 
@@ -271,7 +347,9 @@ export default function MyPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">멤버십 번호</div>
                     <div className="md:col-span-2">
-                      <span className="text-lg">2024051789</span>
+                      <span className="text-lg">
+                        {isLoggedIn && loginInfo ? `RAILLO${loginInfo.userId.toString().padStart(6, '0')}` : '-'}
+                      </span>
                     </div>
                   </div>
 
@@ -357,7 +435,7 @@ export default function MyPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">KTX 마일리지/포인트</div>
                     <div className="md:col-span-2 flex items-center space-x-2">
-                      <span className="text-lg font-semibold text-blue-600">0</span>
+                      <span className="text-lg font-semibold text-blue-600">{userMileage.toLocaleString()}</span>
                       <Button variant="outline" size="sm" className="text-xs rounded-full">
                         <Award className="h-3 w-3 mr-1" />
                         내역보기

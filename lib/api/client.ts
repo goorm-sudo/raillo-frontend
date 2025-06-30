@@ -12,7 +12,7 @@ const apiClient = axios.create({
 // 요청 인터셉터 (토큰 자동 추가)
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -36,7 +36,8 @@ apiClient.interceptors.response.use(
     
     if (error.response?.status === 401) {
       // 토큰 만료 처리
-      localStorage.removeItem('token');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
       window.location.href = '/login';
     }
     
@@ -175,6 +176,35 @@ export const setDefaultPaymentMethod = async (paymentMethodId: number) => {
 export const getUserInfo = async () => {
   const { data } = await apiClient.get('/auth/me');
   return data;
+};
+
+// 마일리지 API 함수들
+export const mileageApi = {
+  // 마일리지 잔액 조회
+  getMileageBalance: async (memberId: number) => {
+    const { data } = await apiClient.get(`/api/v1/mileage/balance/${memberId}`);
+    return data;
+  },
+
+  // 간단한 마일리지 잔액 조회
+  getSimpleMileageBalance: async (memberId: number) => {
+    const { data } = await apiClient.get(`/api/v1/mileage/balance/${memberId}/simple`);
+    return data;
+  },
+
+  // 사용 가능한 마일리지 조회
+  getAvailableMileage: async (memberId: number) => {
+    const { data } = await apiClient.get(`/api/v1/mileage/available/${memberId}`);
+    return data;
+  },
+
+  // 마일리지 통계 조회
+  getMileageStatistics: async (memberId: number, startDate: string, endDate: string) => {
+    const { data } = await apiClient.get(`/api/v1/mileage/statistics/${memberId}`, {
+      params: { startDate, endDate },
+    });
+    return data;
+  },
 };
 
 export default apiClient;
