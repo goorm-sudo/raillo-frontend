@@ -186,4 +186,24 @@ export const trainAPI = {
 };
 
 // 기존 호환성을 위한 export
-export const searchTrains = trainAPI.searchTrains; 
+export const searchTrains = trainAPI.searchTrains;
+
+// 예약 요청 타입
+export interface ReservationRequest {
+  trainScheduleId: number;
+  seatId: number;
+  memberId?: number; // 비회원이면 undefined
+  departureStationId: number;
+  arrivalStationId: number;
+  passengerSummary: {
+    adult: number;
+    child: number;
+    senior: number;
+  };
+  tripType: "OW";
+}
+
+// 예약 요청 함수
+export const makeReservation = async (request: ReservationRequest) => {
+  return api.post("/api/v1/booking/reservation", request);
+}; 

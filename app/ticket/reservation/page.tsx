@@ -42,7 +42,7 @@ interface ReservationInfo {
   arrivalTime: string
   seatClass: string
   carNumber: number
-  seatNumber: string
+  seats?: string[]
   price: number
   paymentDeadline: Date
   reservationNumber: string
@@ -59,6 +59,31 @@ export default function ReservationPage() {
   const [showCartSuccessDialog, setShowCartSuccessDialog] = useState(false)
 
   useEffect(() => {
+    // sessionStorage에서 예약 정보 가져오기
+    const stored = typeof window !== 'undefined' ? sessionStorage.getItem('reservationInfo') : null
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        setReservation({
+          trainType: parsed.trainType,
+          trainNumber: parsed.trainNumber,
+          date: parsed.date,
+          departureStation: parsed.departureStation,
+          arrivalStation: parsed.arrivalStation,
+          departureTime: parsed.departureTime,
+          arrivalTime: parsed.arrivalTime,
+          seatClass: parsed.seatClass,
+          carNumber: parsed.carNumber,
+          seats: parsed.seats,
+          price: parsed.price,
+          paymentDeadline: addMinutes(new Date(), 10), // 10분 후 결제 기한
+          reservationNumber: '', // 추후 백엔드 응답값으로 대체
+        })
+        return
+      } catch (e) {
+        // 파싱 실패 시 fallback
+      }
+    }
     // URL 파라미터에서 예약 정보 가져오기 (실제로는 API 호출)
     const mockReservation: ReservationInfo = {
       trainType: "ITX-새마을",
@@ -70,12 +95,11 @@ export default function ReservationPage() {
       arrivalTime: "13:14",
       seatClass: "일반실",
       carNumber: 3,
-      seatNumber: "8A",
+      seats: ["8A"],
       price: 42400,
-      paymentDeadline: addMinutes(new Date(), 30), // 30분 후 결제 기한
+      paymentDeadline: addMinutes(new Date(), 10), // 10분 후 결제 기한
       reservationNumber: "R2025060100001",
     }
-
     setReservation(mockReservation)
   }, [])
 
@@ -271,7 +295,14 @@ export default function ReservationPage() {
                       <div className="flex items-center space-x-2">
                         <span className="font-medium">{reservation.seatClass}</span>
                         <span className="text-gray-600">
-                          {reservation.carNumber}호차 {reservation.seatNumber}
+                          {reservation.carNumber}호차
+                          {reservation.seats && reservation.seats.length > 0
+                            ? reservation.seats.map((seat, idx) => (
+                                <span key={seat}>
+                                  {idx > 0 ? ', ' : ' '}{seat}
+                                </span>
+                              ))
+                            : ''}
                         </span>
                       </div>
                       <div className="text-lg font-bold text-blue-600">{formatPrice(reservation.price)}</div>

@@ -38,8 +38,6 @@ interface BookingPanelProps {
   getTrainTypeColor: (trainType: string) => string
   getSeatTypeName: (seatType: string) => string
   formatPrice: (price: number) => string
-  getTotalPassengers: () => number
-  getPassengerSummary: () => string
 }
 
 export function BookingPanel({
@@ -54,8 +52,6 @@ export function BookingPanel({
   getTrainTypeColor,
   getSeatTypeName,
   formatPrice,
-  getTotalPassengers,
-  getPassengerSummary,
 }: BookingPanelProps) {
   if (!isOpen || !selectedTrain) return null
 
@@ -114,11 +110,10 @@ export function BookingPanel({
               </h3>
               <div className="bg-gray-50 rounded-lg p-4 flex-1 flex items-center justify-center">
                 <div className="text-center w-full">
-                  <div className="text-sm text-gray-600 mb-1">{getSeatTypeName(selectedSeatType)}</div>
+                  <div className="text-sm text-gray-600 mb-1">{getSeatTypeName(selectedSeatType)} (1인 기준)</div>
                   <div className="text-2xl font-bold text-blue-600">
-                    {formatPrice((selectedTrain as any)[selectedSeatType]?.price * getTotalPassengers())}
+                    {formatPrice((selectedTrain as any)[selectedSeatType]?.price)}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">{getPassengerSummary()}</div>
                 </div>
               </div>
             </div>
@@ -159,15 +154,14 @@ export function BookingPanel({
               <h3 className="font-semibold text-gray-900 mb-3">예매하기</h3>
               <div className="bg-blue-50 rounded-lg p-4 mb-3 flex-1 flex items-center justify-center">
                 <div className="text-center w-full">
-                  <div className="text-sm text-gray-600 mb-1">총 결제 금액</div>
-                  <div className="text-xl font-bold text-blue-600">
-                    {formatPrice((selectedTrain as any)[selectedSeatType]?.price * getTotalPassengers())}
+                  <div className="text-sm text-gray-700 mb-1">
+                    선택하신 열차와 좌석 정보를<br />확인하신 후 예매를 진행해 주세요.
                   </div>
                 </div>
               </div>
               <Button
                 onClick={onBooking}
-                className="w-full h-10 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full h-10 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
               >
                 예매하기
               </Button>

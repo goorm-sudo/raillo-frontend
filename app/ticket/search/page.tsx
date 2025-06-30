@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
-import { searchTrains, stationUtils } from "@/lib/api/train"
+import { searchTrains, stationUtils, makeReservation } from "@/lib/api/train"
 import { SeatSelectionDialog } from "@/components/ui/seat-selection-dialog"
 import { BookingPanel } from "@/components/ui/booking-panel"
 import { SearchForm } from "@/components/ui/search-form"
 import { TrainList } from "@/components/ui/train-list"
 import { UsageInfo } from "@/components/ui/usage-info"
+import { tokenManager } from "@/lib/auth"
 
 // 2. Add PassengerCounts interface
 interface PassengerCounts {
@@ -25,6 +26,7 @@ interface PassengerCounts {
 }
 
 interface TrainInfo {
+  trainScheduleId?: number
   id: string
   trainType: string
   trainNumber: string
@@ -54,7 +56,6 @@ export default function TrainSearchPage() {
   const router = useRouter()
   const [allTrains, setAllTrains] = useState<TrainInfo[]>([])
   const [displayedTrains, setDisplayedTrains] = useState<TrainInfo[]>([])
-  const [filteredTrains, setFilteredTrains] = useState<TrainInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
@@ -96,23 +97,6 @@ export default function TrainSearchPage() {
   const [departureStation, setDepartureStation] = useState("")
   const [arrivalStation, setArrivalStation] = useState("")
   const [departureDateParam, setDepartureDateParam] = useState(new Date().toISOString().split("T")[0])
-  const [passengersParam, setPassengersParam] = useState("1")
-
-  // API 호출 디바운스
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
-
-  // 디바운스된 API 호출 함수
-  const debouncedFetchTrains = useCallback((searchData: any) => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout)
-    }
-    
-    const timeout = setTimeout(() => {
-      fetchTrainsFromAPI(searchData)
-    }, 500) // 500ms 디바운스
-    
-    setSearchTimeout(timeout)
-  }, [searchTimeout])
 
   // 실제 API 호출 함수
   const fetchTrainsFromAPI = async (searchData: any) => {
@@ -149,6 +133,7 @@ export default function TrainSearchPage() {
         const resultArray = Array.isArray(content) ? content : [content]
         
         const apiTrains: TrainInfo[] = resultArray.map((train: any, index: number) => ({
+          trainScheduleId: train.trainScheduleId,
           id: `${train.trainNumber || train.id || index}_${train.departureTime || index}_${index}`,
           trainType: train.trainName || train.trainType || "KTX",
           trainNumber: train.trainNumber || `${index + 1}`,
@@ -178,7 +163,6 @@ export default function TrainSearchPage() {
         
         setAllTrains(apiTrains)
         setDisplayedTrains(apiTrains) // 모든 데이터를 먼저 보여줌
-        setFilteredTrains(apiTrains)
         setTotalResults(totalElements)
         setCurrentPage(0) // 페이지 0으로 초기화
         setHasNext(hasNext)
@@ -187,7 +171,6 @@ export default function TrainSearchPage() {
         // 실패 시 빈 결과로 설정 (alert 제거)
         setAllTrains([])
         setDisplayedTrains([])
-        setFilteredTrains([])
         setTotalResults(0)
         setHasNext(false)
       }
@@ -197,7 +180,6 @@ export default function TrainSearchPage() {
       // 오류 시 빈 결과로 설정 (alert 제거)
       setAllTrains([])
       setDisplayedTrains([])
-      setFilteredTrains([])
       setTotalResults(0)
       setHasNext(false)
     } finally {
@@ -232,7 +214,6 @@ export default function TrainSearchPage() {
         // fallback으로 빈 결과 설정
         setAllTrains([])
         setDisplayedTrains([])
-        setFilteredTrains([])
         setTotalResults(0)
         setLoading(false)
       }
@@ -242,16 +223,8 @@ export default function TrainSearchPage() {
       setArrivalStation("부산")
       setAllTrains([])
       setDisplayedTrains([])
-      setFilteredTrains([])
       setTotalResults(0)
       setLoading(false)
-    }
-
-    // Cleanup function
-    return () => {
-      if (searchTimeout) {
-        clearTimeout(searchTimeout)
-      }
     }
   }, [])
 
@@ -448,6 +421,7 @@ export default function TrainSearchPage() {
         const resultArray = Array.isArray(content) ? content : [content]
         
         const newTrains: TrainInfo[] = resultArray.map((train: any, index: number) => ({
+          trainScheduleId: train.trainScheduleId,
           id: `${train.trainNumber || train.id || index}_${train.departureTime || index}_${index}_${nextPage}`,
           trainType: train.trainName || train.trainType || "KTX",
           trainNumber: train.trainNumber || `${index + 1}`,
@@ -473,7 +447,6 @@ export default function TrainSearchPage() {
         // 기존 데이터에 새 데이터 추가
         setAllTrains(prev => [...prev, ...newTrains])
         setDisplayedTrains(prev => [...prev, ...newTrains])
-        setFilteredTrains(prev => [...prev, ...newTrains])
         setCurrentPage(nextPage)
         setHasNext(response.result.hasNext ?? false)
         if (newTrains.length === 0) {
@@ -488,29 +461,71 @@ export default function TrainSearchPage() {
     }
   }
 
-  const handleBooking = () => {
+  // 예약용 passengerSummary 생성 함수
+  const getPassengerSummaryForReservation = () => ({
+    adult: passengerCounts.adult,
+    child: passengerCounts.child,
+    senior: passengerCounts.senior,
+  })
+
+  const handleBooking = async () => {
     if (!selectedTrain) return
 
-    // Check if guest user
-    const urlParams = new URLSearchParams(window.location.search)
-    const isGuest = urlParams.get("guest") === "true"
+    // 로그인 상태 확인
+    if (!tokenManager.isAuthenticated()) {
+      // 현재 경로를 redirectTo로 전달
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/ticket/search'
+      router.push(`/login?redirectTo=${encodeURIComponent(currentPath)}`)
+      return
+    }
 
-    if (isGuest) {
-      // Navigate to guest booking page
-      const guestBookingParams = new URLSearchParams({
-        trainType: selectedTrain.trainType,
-        trainNumber: selectedTrain.trainNumber,
-        departure: departureStation,
-        arrival: arrivalStation,
-        date: date ? date.toISOString().split("T")[0] : departureDateParam,
-        time: selectedTrain.departureTime,
-        seatType: getSeatTypeName(selectedSeatType),
-        price: selectedTrain[selectedSeatType].price.toString(),
-      })
-      router.push(`/ticket/guest-booking?${guestBookingParams.toString()}`)
-    } else {
-      // Navigate to regular reservation page
-      router.push("/ticket/reservation")
+    // 역 id 추출
+    const departureStationId = stationUtils.getStationId(departureStation)
+    const arrivalStationId = stationUtils.getStationId(arrivalStation)
+
+    if (!departureStationId || !arrivalStationId) {
+      alert("역 정보를 찾을 수 없습니다.")
+      return
+    }
+
+    // passengerSummary 생성
+    const passengerSummary = getPassengerSummaryForReservation()
+
+    // 예약 요청 데이터
+    const reservationRequest = {
+      trainScheduleId: selectedTrain.trainScheduleId!,
+      seatId: 1, // 고정
+      departureStationId,
+      arrivalStationId,
+      passengerSummary,
+      tripType: 'OW' as const,
+    }
+
+    try {
+      const response = await makeReservation(reservationRequest)
+      if (response.result) {
+        // 예약 정보로 채울 수 있는 값만 세션에 저장
+        const reservationInfo = {
+          trainType: selectedTrain.trainType,
+          trainNumber: selectedTrain.trainNumber,
+          date: date ? date.toISOString().split('T')[0] : '',
+          departureStation: departureStation,
+          arrivalStation: arrivalStation,
+          departureTime: selectedTrain.departureTime,
+          arrivalTime: selectedTrain.arrivalTime,
+          seatClass: getSeatTypeName(selectedSeatType),
+          carNumber: selectedCar,
+          seats: selectedSeats, // 전체 좌석 배열 추가
+          price: selectedTrain[selectedSeatType].price * selectedSeats.length,
+          // paymentDeadline, reservationNumber 등은 백엔드 응답에 따라 추후 추가
+        }
+        sessionStorage.setItem('reservationInfo', JSON.stringify(reservationInfo))
+        router.push(`/ticket/reservation`)
+      } else {
+        alert("예약에 실패했습니다.")
+      }
+    } catch (e) {
+      alert("예약 요청 중 오류가 발생했습니다.")
     }
   }
 
@@ -547,42 +562,8 @@ export default function TrainSearchPage() {
     setShowBookingPanel(true) // 예매 패널 다시 열기
   }
 
-  // 클라이언트 사이드에서 URL 파라미터 읽기
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const dateParam = urlParams.get("date")
-    const departureParam = urlParams.get("departure")
-    const arrivalParam = urlParams.get("arrival")
-    const passengersParam = urlParams.get("passengers")
-
-    if (dateParam) {
-      setDate(new Date(dateParam))
-    }
-    if (departureParam) {
-      setDepartureStation(departureParam)
-    }
-    if (arrivalParam) {
-      setArrivalStation(arrivalParam)
-    }
-    if (passengersParam) {
-      setPassengersParam(passengersParam)
-    }
-  }, [])
-
   const getTotalPassengers = () => {
     return Object.values(passengerCounts).reduce((sum, count) => sum + count, 0)
-  }
-
-  const getPassengerSummary = () => {
-    const summaries = []
-    if (passengerCounts.adult > 0) summaries.push(`어른 ${passengerCounts.adult}명`)
-    if (passengerCounts.child > 0) summaries.push(`어린이 ${passengerCounts.child}명`)
-    if (passengerCounts.infant > 0) summaries.push(`유아 ${passengerCounts.infant}명`)
-    if (passengerCounts.senior > 0) summaries.push(`경로 ${passengerCounts.senior}명`)
-    if (passengerCounts.severelydisabled > 0) summaries.push(`중증장애인 ${passengerCounts.severelydisabled}명`)
-    if (passengerCounts.mildlydisabled > 0) summaries.push(`경증장애인 ${passengerCounts.mildlydisabled}명`)
-    if (passengerCounts.veteran > 0) summaries.push(`국가유공자 ${passengerCounts.veteran}명`)
-    return summaries.join(", ")
   }
 
   const [hasNext, setHasNext] = useState(false)
@@ -632,7 +613,6 @@ export default function TrainSearchPage() {
             <TrainList
               displayedTrains={displayedTrains}
               totalResults={totalResults}
-              filteredTrains={filteredTrains}
               selectedTrain={selectedTrain}
               loadingMore={loadingMore}
               hasMoreTrains={hasNext}
@@ -673,7 +653,6 @@ export default function TrainSearchPage() {
         onSeatSelection={() => {
           // BookingPanel 닫기
           setShowBookingPanel(false)
-          
           // 약간의 지연 후 좌석 선택 다이얼로그 열기
           setTimeout(() => {
             setShowSeatSelection(true)
@@ -683,12 +662,9 @@ export default function TrainSearchPage() {
         getTrainTypeColor={getTrainTypeColor}
         getSeatTypeName={getSeatTypeName}
         formatPrice={formatPrice}
-        getTotalPassengers={getTotalPassengers}
-        getPassengerSummary={getPassengerSummary}
       />
 
       <Footer />
     </div>
   )
 }
-
