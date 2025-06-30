@@ -175,8 +175,13 @@ export const stationUtils = {
 // 열차 관련 API
 export const trainAPI = {
   // 열차 조회
-  searchTrains: async (request: TrainSearchRequest): Promise<ApiResponse<TrainSearchResponse>> => {
-    return api.post<TrainSearchResponse>('/api/v1/train-schedule/search', request);
+  searchTrains: async (
+    request: TrainSearchRequest,
+    page: number = 0,
+    size: number = 10
+  ): Promise<ApiResponse<TrainSearchResponse>> => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) }).toString();
+    return api.post<TrainSearchResponse>(`/api/v1/train-schedule/search?${params}`, request);
   },
 };
 

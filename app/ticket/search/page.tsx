@@ -57,7 +57,7 @@ export default function TrainSearchPage() {
   const [filteredTrains, setFilteredTrains] = useState<TrainInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPage, setCurrentPage] = useState(0)
   const [selectedTrain, setSelectedTrain] = useState<TrainInfo | null>(null)
   const [selectedSeatType, setSelectedSeatType] = useState<SeatType>("generalSeat")
   const [showBookingPanel, setShowBookingPanel] = useState(false)
@@ -137,11 +137,11 @@ export default function TrainSearchPage() {
         arrivalStationId,
         operationDate: searchData.departureDate,
         passengerCount: totalPassengers,
-        departureHour: searchData.departureHour.replace("시", ""),
+        departureHour: searchData.departureHour.replace("시", "")
       }
 
       // 열차 조회 API 호출
-      const response = await searchTrains(searchRequest)
+      const response = await searchTrains(searchRequest, 0, 10)
       
       if (response.result) {
         // 새로운 API 응답 구조 처리
@@ -174,13 +174,14 @@ export default function TrainSearchPage() {
         // 페이지네이션 정보 처리
         const totalElements = response.result.totalElements || apiTrains.length
         const totalPages = response.result.totalPages || 1
-        const hasNext = response.result.hasNext || false
+        const hasNext = response.result.hasNext ?? false
         
         setAllTrains(apiTrains)
         setDisplayedTrains(apiTrains) // 모든 데이터를 먼저 보여줌
         setFilteredTrains(apiTrains)
         setTotalResults(totalElements)
-        setCurrentPage(1) // 페이지 초기화
+        setCurrentPage(0) // 페이지 0으로 초기화
+        setHasNext(hasNext)
       } else {
         console.error("열차 조회 실패:", response.message)
         // 실패 시 빈 결과로 설정 (alert 제거)
@@ -188,6 +189,7 @@ export default function TrainSearchPage() {
         setDisplayedTrains([])
         setFilteredTrains([])
         setTotalResults(0)
+        setHasNext(false)
       }
     } catch (error) {
       console.error("열차 조회 중 오류 발생:", error)
@@ -197,6 +199,7 @@ export default function TrainSearchPage() {
       setDisplayedTrains([])
       setFilteredTrains([])
       setTotalResults(0)
+      setHasNext(false)
     } finally {
       setLoading(false)
     }
@@ -276,7 +279,7 @@ export default function TrainSearchPage() {
     setSearchConditionsChanged(false)
     
     // 페이지 초기화
-    setCurrentPage(1)
+    setCurrentPage(0)
     
     // 새로운 조건으로 API 호출
     fetchTrainsFromAPI(newSearchData)
@@ -420,7 +423,6 @@ export default function TrainSearchPage() {
     setLoadingMore(true)
 
     try {
-      // 다음 페이지 데이터를 가져오기 위한 API 호출
       const nextPage = currentPage + 1
       const departureStationId = stationUtils.getStationId(searchData.departureStation)
       const arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
@@ -436,12 +438,10 @@ export default function TrainSearchPage() {
         arrivalStationId,
         operationDate: searchData.departureDate,
         passengerCount: Object.values(searchData.passengers).reduce((sum: number, count: any) => sum + (count as number), 0),
-        departureHour: searchData.departureHour.replace("시", ""),
-        page: nextPage, // 페이지 정보 추가
-        size: 10 // 한 번에 가져올 데이터 수
+        departureHour: searchData.departureHour.replace("시", "")
       }
 
-      const response = await searchTrains(searchRequest)
+      const response = await searchTrains(searchRequest, nextPage, 10)
       
       if (response.result) {
         const content = response.result.content || response.result
@@ -475,14 +475,14 @@ export default function TrainSearchPage() {
         setDisplayedTrains(prev => [...prev, ...newTrains])
         setFilteredTrains(prev => [...prev, ...newTrains])
         setCurrentPage(nextPage)
-        
-        // 더 이상 데이터가 없으면 totalResults 업데이트
+        setHasNext(response.result.hasNext ?? false)
         if (newTrains.length === 0) {
           setTotalResults(displayedTrains.length)
         }
       }
     } catch (error) {
       console.error("더보기 로딩 중 오류 발생:", error)
+      setHasNext(false)
     } finally {
       setLoadingMore(false)
     }
@@ -585,6 +585,8 @@ export default function TrainSearchPage() {
     return summaries.join(", ")
   }
 
+  const [hasNext, setHasNext] = useState(false)
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
@@ -622,7 +624,7 @@ export default function TrainSearchPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">
-                검색 결과 ({totalResults > 0 ? totalResults : filteredTrains.length}개)
+                검색 결과
               </h2>
               <div className="text-sm text-gray-600">* 요금은 어른 기준이며, 할인 혜택이 적용될 수 있습니다.</div>
             </div>
@@ -633,7 +635,7 @@ export default function TrainSearchPage() {
               filteredTrains={filteredTrains}
               selectedTrain={selectedTrain}
               loadingMore={loadingMore}
-              hasMoreTrains={totalResults > displayedTrains.length}
+              hasMoreTrains={hasNext}
               onSeatSelection={handleSeatSelection}
               onLoadMore={handleLoadMore}
               getTrainTypeColor={getTrainTypeColor}

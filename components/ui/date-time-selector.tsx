@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { format, addMonths, startOfDay, isBefore, isSameDay } from "date-fns"
@@ -37,7 +37,10 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
   const isPastTime = (date: Date, hour: string) => {
     const selectedDateTime = new Date(date)
     selectedDateTime.setHours(parseInt(hour), 0, 0, 0)
-    return isBefore(selectedDateTime, new Date())
+    const now = new Date()
+    // '지금 시간'은 선택 가능하게 (같은 시각은 true)
+    const nowHourDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 0, 0, 0)
+    return selectedDateTime < nowHourDate
   }
 
   // 날짜 선택 가능 여부 확인
@@ -125,6 +128,37 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
       value ? value.getHours().toString().padStart(2, '0') + '시' : new Date().getHours().toString().padStart(2, '0') + '시'
     )
   }
+
+  const hourRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        const idx = hourOptions.findIndex((h) => h === selectedHour)
+        const btn = hourRefs.current[idx]
+        const container = scrollContainerRef.current
+        if (btn && container) {
+          const left = btn.offsetLeft - container.offsetWidth / 2 + btn.offsetWidth / 2
+          container.scrollTo({ left })
+        }
+      }, 0)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen) {
+      const idx = hourOptions.findIndex((h) => h === selectedHour)
+      const btn = hourRefs.current[idx]
+      const container = scrollContainerRef.current
+      if (btn && container) {
+        const left = btn.offsetLeft - container.offsetWidth / 2 + btn.offsetWidth / 2
+        container.scrollTo({ left })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedHour])
 
   // value가 변경될 때 tempDate 초기화
   useEffect(() => {
@@ -225,11 +259,12 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
             {/* 시간 선택 */}
             <div className="mb-4">
               <h4 className="text-sm font-medium mb-3">시간 선택</h4>
-              <div className="w-full overflow-x-auto">
+              <div className="w-full overflow-x-auto" ref={scrollContainerRef}>
                 <div className="flex gap-2 min-w-max pb-2">
-                  {hourOptions.map((hour) => (
+                  {hourOptions.map((hour, idx) => (
                     <Button
                       key={hour}
+                      ref={el => { hourRefs.current[idx] = el }}
                       variant={selectedHour === hour ? "default" : "outline"}
                       size="sm"
                       className={`text-sm py-1 px-2 h-8 min-w-[50px] ${

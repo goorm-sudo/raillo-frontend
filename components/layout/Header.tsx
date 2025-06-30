@@ -91,15 +91,16 @@ export default function Header() {
   const breadcrumbs = getBreadcrumbs()
 
   return (
-    <header className="bg-white/80 backdrop-blur shadow-sm border-b sticky top-0 z-40">
+    <header className="bg-white shadow-sm border-b sticky top-0 z-40">
       <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          {/* 왼쪽: 로고와 브레드크럼 */}
           <div className="flex items-center space-x-4">
             <Link href="/" className="flex items-center space-x-2">
               <Train className="h-8 w-8 text-blue-600" />
               <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
             </Link>
-            {/* Breadcrumb */}
+            {/* 브레드크럼 */}
             {breadcrumbs.length > 1 && (
               <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
                 {breadcrumbs.map((breadcrumb, index) => (
@@ -122,52 +123,56 @@ export default function Header() {
               </div>
             )}
           </div>
-          <nav className="hidden md:flex items-center space-x-4">
-            {isLoggedIn ? (
-              <>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="flex items-center space-x-2"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>로그아웃</span>
-                </Button>
-                <Link href="/cart">
-                  <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                    <ShoppingCart className="h-4 w-4" />
-                    <span>장바구니</span>
+
+          {/* 오른쪽: 네비게이션과 카테고리 버튼 */}
+          <div className="flex items-center space-x-4 ml-auto">
+            <nav className="hidden md:flex items-center space-x-4">
+              {isLoggedIn ? (
+                <>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="flex items-center space-x-2"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>로그아웃</span>
                   </Button>
-                </Link>
-                <Link href="/mypage">
-                  <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                    <User className="h-4 w-4" />
-                    <span>마이페이지</span>
-                  </Button>
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link href="/login">
-                  <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                    <LogIn className="h-4 w-4" />
-                    <span>로그인</span>
-                  </Button>
-                </Link>
-                <Link href="/cart">
-                  <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                    <ShoppingCart className="h-4 w-4" />
-                    <span>장바구니</span>
-                  </Button>
-                </Link>
-              </>
-            )}
-          </nav>
-          {/* 모바일 메뉴 버튼 */}
-          <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setShowSidebar(true)}>
-            <Menu className="h-5 w-5" />
-          </Button>
+                  <Link href="/cart">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <ShoppingCart className="h-4 w-4" />
+                      <span>장바구니</span>
+                    </Button>
+                  </Link>
+                  <Link href="/mypage">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <User className="h-4 w-4" />
+                      <span>마이페이지</span>
+                    </Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/login">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <LogIn className="h-4 w-4" />
+                      <span>로그인</span>
+                    </Button>
+                  </Link>
+                  <Link href="/cart">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <ShoppingCart className="h-4 w-4" />
+                      <span>장바구니</span>
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </nav>
+            {/* 카테고리 메뉴 버튼 */}
+            <Button variant="ghost" size="sm" onClick={() => setShowSidebar(true)}>
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </div>
       {/* 사이드바 오버레이 */}

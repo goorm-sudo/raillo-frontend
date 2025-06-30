@@ -107,7 +107,7 @@ export function TrainList({
             ) : (
               <>
                 <Plus className="h-4 w-4 mr-2" />
-                더보기 ({totalResults - displayedTrains.length}개 더)
+                더보기
               </>
             )}
           </Button>
