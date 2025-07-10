@@ -181,7 +181,7 @@ export const trainAPI = {
     size: number = 10
   ): Promise<ApiResponse<TrainSearchResponse>> => {
     const params = new URLSearchParams({ page: String(page), size: String(size) }).toString();
-    return api.post<TrainSearchResponse>(`/api/v1/train-schedule/search?${params}`, request);
+    return api.post<TrainSearchResponse>(`/api/v1/trains/search?${params}`, request);
   },
 };
 
