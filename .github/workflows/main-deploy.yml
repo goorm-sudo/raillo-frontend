@@ -14,16 +14,24 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18.x # 최신 Next.js 호환
-          cache: npm          #  npm 캐시 사용
+          cache: pnpm          #  pnpm 캐시 사용
 
-      - name: Install & Build & Export
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install Dependencies (pnpm)
+        run: pnpm install
+
+      - name: Patch swc dependencies (for Next.js)
+        run: pnpm exec next --help > /dev/null
+
+      - name: Build & Export
         env:
           NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
           NODE_ENV: ${{ secrets.NODE_ENV }}
         run: |
-          npm ci                        # lock 파일 기반 설치
-          npm run build
-          npm run export
+          pnpm run build
+          pnpm run export
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
