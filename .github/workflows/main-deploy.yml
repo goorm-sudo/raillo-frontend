@@ -16,6 +16,9 @@ jobs:
           node-version: 18.x # 최신 Next.js 호환
           cache: npm          #  npm 캐시 사용
 
+      - name: Install pnpm
+        run: npm install -g pnpm
+
       - name: Install & Build & Export
         env:
           NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
