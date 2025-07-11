@@ -5,7 +5,7 @@ on:
     branches: main
 jobs:
   build:
-    runs-on: ubuntu-latests
+    runs-on: ubuntu-latest
     steps:
       - name: Git Checkout
         uses: actions/checkout@v3
@@ -14,7 +14,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18.x # 최신 Next.js 호환
-          cache: npm          # 👈 npm 캐시 사용
+          cache: npm          #  npm 캐시 사용
 
       - name: Install & Build & Export
         env:
