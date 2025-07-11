@@ -14,10 +14,12 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18.x # 최신 Next.js 호환
-          cache: pnpm          #  pnpm 캐시 사용
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
 
       - name: Install Dependencies (pnpm)
         run: pnpm install
@@ -28,7 +30,7 @@ jobs:
       - name: Build & Export
         env:
           NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
-          NODE_ENV: ${{ secrets.NODE_ENV }}
+          NODE_ENV: production
         run: |
           pnpm run build
           pnpm run export
