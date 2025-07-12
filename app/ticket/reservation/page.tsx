@@ -33,7 +33,7 @@ import {
 } from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
-import { deleteReservation, getReservationDetail } from '@/lib/api/booking'
+import { deleteReservation, getReservationDetail, addToCart } from '@/lib/api/booking'
 
 interface ReservationDetail {
   reservationId: number;
@@ -151,10 +151,39 @@ export default function ReservationPage() {
     setShowCartDialog(true)
   }
 
-  const confirmAddToCart = () => {
+  const confirmAddToCart = async () => {
     setShowCartDialog(false)
-    // 실제로는 장바구니 API 호출
-    setShowCartSuccessDialog(true)
+    try {
+      if (reservation) {
+        const response = await addToCart({ reservationId: reservation.reservationId })
+        if (response.message) {
+          setShowCartSuccessDialog(true)
+        } else {
+          alert('장바구니 추가에 실패했습니다.')
+        }
+      } else {
+        alert('예약 정보를 찾을 수 없습니다.')
+      }
+    } catch (e: any) {
+      console.error('장바구니 추가 실패:', e)
+      
+      // 에러 응답 구조 확인
+      if (e.errorMessage) {
+        // 직접 에러 객체에 errorMessage가 있는 경우
+        alert(e.errorMessage)
+      } else if (e.response?.data?.errorMessage) {
+        // response.data에 errorMessage가 있는 경우
+        alert(e.response.data.errorMessage)
+      } else if (e.response?.data?.message) {
+        // response.data에 message가 있는 경우
+        alert(e.response.data.message)
+      } else if (e.message) {
+        // 일반적인 에러 메시지
+        alert(e.message)
+      } else {
+        alert('장바구니 추가 중 오류가 발생했습니다.')
+      }
+    }
   }
 
   const handleCartSuccessConfirm = () => {

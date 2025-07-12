@@ -57,4 +57,32 @@ export const deleteReservation = async (reservationId: number) => {
   return api.delete("/api/v1/booking/reservation", {
     reservationId
   })
-} 
+}
+
+// 장바구니에 예약 추가 요청 타입
+export interface AddToCartRequest {
+  reservationId: number
+}
+
+// 장바구니에 예약 추가 응답 타입
+export interface AddToCartResponse {
+  message: string
+}
+
+// 장바구니 조회 응답 타입
+export interface CartResponse {
+  message: string
+  result: ReservationDetailResponse[]
+}
+
+// 장바구니에 예약 추가 함수
+export const addToCart = async (request: AddToCartRequest) => {
+  return api.post<AddToCartResponse>("/api/v1/cart/reservations", request)
+}
+
+// 장바구니 조회 함수
+export const getCart = async () => {
+  return api.get<CartResponse>("/api/v1/cart/reservations")
+}
+
+ 
