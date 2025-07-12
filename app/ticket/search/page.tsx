@@ -5,7 +5,8 @@ import {useRouter} from "next/navigation"
 import {format} from "date-fns"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
-import {makeReservation, searchTrains, stationUtils, searchCars, searchSeats} from "@/lib/api/train"
+import {searchTrains, stationUtils, searchCars, searchSeats} from "@/lib/api/train"
+import {makeReservation} from "@/lib/api/booking"
 import {SeatSelectionDialog} from "@/components/ui/seat-selection-dialog"
 import {BookingPanel} from "@/components/ui/booking-panel"
 import {SearchForm} from "@/components/ui/search-form"
@@ -576,24 +577,10 @@ export default function TrainSearchPage() {
     try {
       const response = await makeReservation(reservationRequest)
       if (response.result) {
-        const { reservationId, seatReservationIds } = response.result
-        const reservationInfo: ReservationInfo = {
-          reservationId, // 예약 id 저장
-          seatReservationId: seatReservationIds[0] || 0, // 첫 번째 좌석 예약 id 저장
-          trainType: selectedTrain.trainType,
-          trainNumber: selectedTrain.trainNumber,
-          date: date ? date.toISOString().split('T')[0] : '',
-          departureStation: departureStation,
-          arrivalStation: arrivalStation,
-          departureTime: selectedTrain.departureTime,
-          arrivalTime: selectedTrain.arrivalTime,
-          seatClass: getSeatTypeName(selectedSeatType),
-          carNumber: selectedCar,
-          seats: selectedSeats, // 전체 좌석 배열 추가
-          price: selectedTrain[selectedSeatType].price * selectedSeats.length,
-        }
-        sessionStorage.setItem('reservationInfo', JSON.stringify(reservationInfo))
-        router.push(`/ticket/reservation`)
+        const { reservationId } = response.result
+        // 예약 ID를 세션 스토리지에 임시 저장 (API 호출용)
+        sessionStorage.setItem('tempReservationId', reservationId.toString())
+        router.push('/ticket/reservation')
       } else {
         alert("예약에 실패했습니다.")
       }

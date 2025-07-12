@@ -273,31 +273,4 @@ export const searchTrains = trainAPI.searchTrains;
 export const searchCars = trainAPI.searchCars;
 export const searchSeats = trainAPI.searchSeats;
 
-// 예약 요청 타입
-export interface ReservationRequest {
-  trainScheduleId: number;
-  departureStationId: number;
-  arrivalStationId: number;
-  passengers: {
-    passengerType: 'ADULT' | 'CHILD' | 'INFANT' | 'SENIOR' | 'DISABLED_HEAVY' | 'DISABLED_LIGHT' | 'VETERAN';
-    count: number;
-  }[];
-  seatIds: number[];
-  tripType: "OW";
-}
-
-// 예약 응답 타입
-export interface ReservationResponse {
-  reservationId: number;
-  seatReservationIds: number[];
-}
-
-// 예약 요청 함수
-export const makeReservation = async (request: ReservationRequest) => {
-  return api.post<ReservationResponse>("/api/v1/booking/reservation", request);
-};
-
-// 예약 취소 함수 (body에 reservationId를 JSON으로 보냄)
-export const deleteReservation = async (reservationId: number) => {
-  return api.delete('/api/v1/booking/reservation', { reservationId });
-}; 
+ 
