@@ -34,6 +34,7 @@ import {
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import { deleteReservation, getReservationDetail, addToCart } from '@/lib/api/booking'
+import { handleError } from '@/lib/utils/errorHandler'
 
 interface ReservationDetail {
   reservationId: number;
@@ -94,8 +95,8 @@ export default function ReservationPage() {
           setError('예약 정보를 찾을 수 없습니다.')
         }
       } catch (err) {
-        console.error('예약 정보 조회 실패:', err)
-        setError('예약 정보 조회 중 오류가 발생했습니다.')
+        const errorMessage = handleError(err, '예약 정보 조회 중 오류가 발생했습니다.', false)
+        setError(errorMessage)
       } finally {
         setLoading(false)
       }
@@ -142,8 +143,8 @@ export default function ReservationPage() {
       } else {
         alert('예약 정보를 찾을 수 없습니다.')
       }
-    } catch (e) {
-      alert('예약 취소 중 오류가 발생했습니다.')
+    } catch (e: any) {
+      handleError(e, '예약 취소 중 오류가 발생했습니다.')
     }
   }
 
@@ -165,24 +166,7 @@ export default function ReservationPage() {
         alert('예약 정보를 찾을 수 없습니다.')
       }
     } catch (e: any) {
-      console.error('장바구니 추가 실패:', e)
-      
-      // 에러 응답 구조 확인
-      if (e.errorMessage) {
-        // 직접 에러 객체에 errorMessage가 있는 경우
-        alert(e.errorMessage)
-      } else if (e.response?.data?.errorMessage) {
-        // response.data에 errorMessage가 있는 경우
-        alert(e.response.data.errorMessage)
-      } else if (e.response?.data?.message) {
-        // response.data에 message가 있는 경우
-        alert(e.response.data.message)
-      } else if (e.message) {
-        // 일반적인 에러 메시지
-        alert(e.message)
-      } else {
-        alert('장바구니 추가 중 오류가 발생했습니다.')
-      }
+      handleError(e, '장바구니 추가 중 오류가 발생했습니다.')
     }
   }
 

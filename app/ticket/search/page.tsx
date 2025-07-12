@@ -7,6 +7,7 @@ import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import {searchTrains, stationUtils, searchCars, searchSeats} from "@/lib/api/train"
 import {makeReservation} from "@/lib/api/booking"
+import { handleError } from '@/lib/utils/errorHandler'
 import {SeatSelectionDialog} from "@/components/ui/seat-selection-dialog"
 import {BookingPanel} from "@/components/ui/booking-panel"
 import {SearchForm} from "@/components/ui/search-form"
@@ -584,8 +585,8 @@ export default function TrainSearchPage() {
       } else {
         alert("예약에 실패했습니다.")
       }
-    } catch (e) {
-      alert("예약 요청 중 오류가 발생했습니다.")
+    } catch (e: any) {
+      handleError(e, "예약 요청 중 오류가 발생했습니다.")
     }
   }
 

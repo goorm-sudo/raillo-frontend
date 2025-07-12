@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Train, Home, Printer, Eye, EyeOff, User, Mail, Lock, Phone } from "lucide-react"
 import { signup } from "@/lib/api/signup"
 import { validateSignupForm, formatPhoneNumber, removePhoneNumberFormatting, SignupFormData, Agreements, ValidationErrors } from "@/lib/validation/signup"
+import { handleError } from '@/lib/utils/errorHandler'
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 
@@ -177,8 +178,7 @@ export default function SignupPage() {
       // 완료 페이지로 이동
       router.push("/signup/complete")
     } catch (error: any) {
-      console.error('회원가입 에러:', error)
-      alert(error.message || "회원가입에 실패했습니다.")
+      handleError(error, "회원가입에 실패했습니다.")
     } finally {
       setIsLoading(false)
     }

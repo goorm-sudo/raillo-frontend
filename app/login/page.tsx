@@ -23,6 +23,7 @@ import Footer from "@/components/layout/Footer"
 import {useRouter, useSearchParams} from "next/navigation"
 import {login} from "@/lib/api/auth"
 import {tokenManager} from "@/lib/auth"
+import { handleError } from '@/lib/utils/errorHandler'
 
 export default function LoginPage() {
   const [memberNumber, setMemberNumber] = useState("")
@@ -102,8 +103,7 @@ export default function LoginPage() {
         window.location.href = redirectTo ? redirectTo : "/"
       }
     } catch (error: any) {
-      console.error("로그인 에러:", error)
-      alert(error.message || "로그인에 실패했습니다.")
+      handleError(error, "로그인에 실패했습니다.")
     }
   }
 

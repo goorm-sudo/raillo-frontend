@@ -32,6 +32,7 @@ import {
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import { getCart, deleteReservation } from '@/lib/api/booking'
+import { handleError } from '@/lib/utils/errorHandler'
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 
@@ -86,8 +87,8 @@ export default function CartPage() {
           setError('장바구니를 불러올 수 없습니다.')
         }
       } catch (err) {
-        console.error('장바구니 조회 실패:', err)
-        setError('장바구니 조회 중 오류가 발생했습니다.')
+        const errorMessage = handleError(err, '장바구니 조회 중 오류가 발생했습니다.', false)
+        setError(errorMessage)
       } finally {
         setLoading(false)
       }
@@ -152,9 +153,8 @@ export default function CartPage() {
         await deleteReservation(itemToDelete)
         setCartItems((prev) => prev.filter((item) => item.reservationId !== itemToDelete))
         setItemToDelete(null)
-      } catch (e) {
-        console.error('장바구니 삭제 실패:', e)
-        alert('장바구니에서 삭제 중 오류가 발생했습니다.')
+      } catch (e: any) {
+        handleError(e, '장바구니에서 삭제 중 오류가 발생했습니다.')
       }
     }
     setShowDeleteDialog(false)
@@ -176,9 +176,8 @@ export default function CartPage() {
       await Promise.all(selectedItems.map(item => deleteReservation(item.reservationId)))
       setCartItems((prev) => prev.filter((item) => !item.selected))
       setShowDeleteAllDialog(false)
-    } catch (e) {
-      console.error('선택 항목 삭제 실패:', e)
-      alert('선택한 항목들을 삭제 중 오류가 발생했습니다.')
+    } catch (e: any) {
+      handleError(e, '선택한 항목들을 삭제 중 오류가 발생했습니다.')
     }
   }
 
