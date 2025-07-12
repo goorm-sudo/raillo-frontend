@@ -140,9 +140,7 @@ export const STATIONS: Station[] = [
   { id: 74, name: '살미' },
   { id: 75, name: '수안보온천' },
   { id: 76, name: '연풍' },
-  { id: 77, name: '문경' },
-  { id: 78, name: '진부' },
-  { id: 79, name: '구레구' }
+  { id: 77, name: '문경' }
 ];
 
 // 역 정보 유틸리티 함수
@@ -172,6 +170,20 @@ export const stationUtils = {
   }
 };
 
+// 운행 캘린더 정보 타입
+export interface CalendarInfo {
+  operationDate: string;
+  dayOfWeek: string;
+  businessDayType: 'WEEKDAY' | 'WEEKEND';
+  isHoliday: 'Y' | 'N';
+  isBookingAvailable: 'Y' | 'N';
+}
+
+// 운행 캘린더 응답 타입
+export interface CalendarResponse {
+  content: CalendarInfo[];
+}
+
 // 열차 관련 API
 export const trainAPI = {
   // 열차 조회
@@ -182,6 +194,11 @@ export const trainAPI = {
   ): Promise<ApiResponse<TrainSearchResponse>> => {
     const params = new URLSearchParams({ page: String(page), size: String(size) }).toString();
     return api.post<TrainSearchResponse>(`/api/v1/trains/search?${params}`, request);
+  },
+
+  // 운행 캘린더 조회
+  getCalendar: async (): Promise<ApiResponse<CalendarInfo[]>> => {
+    return api.get<CalendarInfo[]>('/api/v1/trains/calendar');
   },
 };
 
