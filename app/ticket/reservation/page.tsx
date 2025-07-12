@@ -31,6 +31,10 @@ import {
   ChevronDown,
   CheckCircle,
 } from "lucide-react"
+import { reservationApi } from "@/lib/api/client"
+import { CreateReservationRequest, PassengerSummary, TripType } from "@/lib/types/reservation.types"
+import { STATION_MAP } from "@/lib/types/train.types"
+import { getLoginInfo } from "@/lib/utils"
 
 interface ReservationInfo {
   trainType: string
@@ -57,27 +61,136 @@ export default function ReservationPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [showCartDialog, setShowCartDialog] = useState(false)
   const [showCartSuccessDialog, setShowCartSuccessDialog] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // URL 파라미터에서 예약 정보 가져오기 (실제로는 API 호출)
-    const mockReservation: ReservationInfo = {
-      trainType: "ITX-새마을",
-      trainNumber: "1036",
-      date: "2025년 06월 02일(월)",
-      departureStation: "대구",
-      arrivalStation: "서울",
-      departureTime: "09:33",
-      arrivalTime: "13:14",
-      seatClass: "일반실",
-      carNumber: 3,
-      seatNumber: "8A",
-      price: 42400,
-      paymentDeadline: addMinutes(new Date(), 30), // 30분 후 결제 기한
-      reservationNumber: "R2025060100001",
+    const fetchReservationInfo = async () => {
+      try {
+        setLoading(true)
+        
+        // sessionStorage에서 예약 데이터 가져오기
+        const storedReservationData = sessionStorage.getItem('reservationData')
+        
+        if (!storedReservationData) {
+          alert('예약 정보가 없습니다. 다시 시도해주세요.')
+          router.push('/ticket/search')
+          return
+        }
+        
+        const reservationData = JSON.parse(storedReservationData)
+        const loginInfo = getLoginInfo()
+        
+        // 백엔드 API 스펙에 맞게 예약 생성 요청 데이터 구성
+        const passengerSummary: PassengerSummary = {
+          adult: 1, // 기본값으로 성인 1명
+          child: 0,
+          senior: 0
+        }
+        
+        // 첫 번째 좌석 ID만 사용 (백엔드가 단일 좌석만 받음)
+        const firstSeat = reservationData.selectedSeats[0]
+        
+        const createReservationRequest: CreateReservationRequest = {
+          trainScheduleId: parseInt(reservationData.train.trainId),
+          seatId: firstSeat?.seatId || 0,
+          departureStationId: STATION_MAP[reservationData.departure] || 1,
+          arrivalStationId: STATION_MAP[reservationData.arrival] || 11,
+          passengerSummary: passengerSummary,
+          tripType: TripType.OW // 편도로 기본값 설정
+        }
+        
+        // 예약 생성 API 호출
+        const response = await reservationApi.createReservation(createReservationRequest)
+        console.log('예약 생성 응답:', response)
+        
+        // 백엔드 응답을 처리
+        const reservationId = response.result.reservationId
+        const seatReservationId = response.result.seatReservationId
+        console.log('예약 생성 성공 - reservationId:', reservationId)
+        
+        // 예약번호 생성 (프론트엔드 표시용)
+        const reservationNumber = `R${new Date().getFullYear()}${String(reservationId).padStart(10, '0')}`
+        
+        // API 응답을 ReservationInfo 형식으로 변환
+        const reservationInfo: ReservationInfo = {
+          trainType: reservationData.train.trainType,
+          trainNumber: reservationData.train.trainNumber,
+          date: reservationData.date,
+          departureStation: reservationData.departure,
+          arrivalStation: reservationData.arrival,
+          departureTime: reservationData.train.departureTime,
+          arrivalTime: reservationData.train.arrivalTime,
+          seatClass: reservationData.seatType,
+          carNumber: parseInt(reservationData.selectedSeats[0]?.carNumber || '1'),
+          seatNumber: reservationData.selectedSeats[0]?.seatNumber || '1A',
+          price: reservationData.totalAmount || reservationData.price,
+          paymentDeadline: addMinutes(new Date(), 30), // 현재 시간으로부터 30분 후
+          reservationNumber: reservationNumber,
+        }
+
+        setReservation(reservationInfo)
+        
+        // 예약 ID와 예약번호를 sessionStorage에 저장
+        sessionStorage.setItem('currentReservationId', String(reservationId))
+        sessionStorage.setItem('currentReservationNumber', reservationNumber)
+        sessionStorage.setItem('currentSeatReservationId', String(seatReservationId))
+        
+        // 열차 정보도 별도 저장 (예약 삭제 시에도 결제 가능하도록)
+        const trainInfo = {
+          trainScheduleId: parseInt(reservationData.train.trainId),
+          trainDepartureTime: `${reservationData.date} ${reservationData.train.departureTime}`,
+          trainArrivalTime: `${reservationData.date} ${reservationData.train.arrivalTime}`,
+          trainOperator: reservationData.train.trainType.includes('KTX') || 
+                        reservationData.train.trainType.includes('산천') ||
+                        reservationData.train.trainType.includes('ITX') ||
+                        reservationData.train.trainType.includes('새마을') ? 'KORAIL' : 
+                        reservationData.train.trainType.includes('SRT') ? 'SRT' : 'KORAIL',
+          routeInfo: `${reservationData.departure}-${reservationData.arrival}`
+        }
+        sessionStorage.setItem('trainInfo', JSON.stringify(trainInfo))
+        console.log('🚄 열차 정보 저장:', trainInfo)
+        
+      } catch (error) {
+        console.error("예약 생성 실패:", error)
+        
+        // API 실패 시 fallback Mock 데이터
+        const mockReservation: ReservationInfo = {
+          trainType: "ITX-새마을",
+          trainNumber: "1036",
+          date: "2025년 06월 02일(월)",
+          departureStation: "대구",
+          arrivalStation: "서울",
+          departureTime: "09:33",
+          arrivalTime: "13:14",
+          seatClass: "일반실",
+          carNumber: 3,
+          seatNumber: "8A",
+          price: 42400,
+          paymentDeadline: addMinutes(new Date(), 30),
+          reservationNumber: "R2025060100001",
+        }
+
+        setReservation(mockReservation)
+        console.warn("임시 예약 데이터를 사용합니다.")
+        
+        // Mock 데이터의 경우에도 열차 정보 저장
+        const mockTrainInfo = {
+          trainScheduleId: 1036, // Mock train ID
+          trainDepartureTime: "2025-06-02 09:33",
+          trainArrivalTime: "2025-06-02 13:14",
+          trainOperator: 'KORAIL',
+          routeInfo: "대구-서울"
+        }
+        sessionStorage.setItem('trainInfo', JSON.stringify(mockTrainInfo))
+        sessionStorage.setItem('currentReservationId', '1')
+        sessionStorage.setItem('currentReservationNumber', mockReservation.reservationNumber)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    setReservation(mockReservation)
-  }, [])
+    fetchReservationInfo()
+  }, [searchParams])
 
   useEffect(() => {
     if (!reservation) return
@@ -107,26 +220,49 @@ export default function ReservationPage() {
     setShowCancelDialog(true)
   }
 
-  const confirmCancelReservation = () => {
-    setShowCancelDialog(false)
-    // 실제로는 취소 API 호출 후 목록 페이지로 이동
-    alert("예약이 취소되었습니다.")
-    router.push("/")
+  const confirmCancelReservation = async () => {
+    try {
+      setShowCancelDialog(false)
+      
+      if (!reservation) return
+      
+      // 실제 예약 취소 API 호출
+      const reservationId = sessionStorage.getItem('currentReservationId')
+      if (reservationId) {
+        await reservationApi.cancelReservation(parseInt(reservationId))
+      }
+      
+      alert("예약이 취소되었습니다.")
+      router.push("/")
+    } catch (error) {
+      console.error("예약 취소 실패:", error)
+      alert("예약 취소 중 오류가 발생했습니다. 다시 시도해주세요.")
+    }
   }
 
   const handleAddToCart = () => {
     setShowCartDialog(true)
   }
 
-  const confirmAddToCart = () => {
-    setShowCartDialog(false)
-    // 실제로는 장바구니 API 호출
-    setShowCartSuccessDialog(true)
+  const confirmAddToCart = async () => {
+    try {
+      setShowCartDialog(false)
+      
+      if (!reservation) return
+      
+      // 실제 장바구니 추가 API 호출 (구현 필요)
+      // await cartApi.addToCart(reservation.reservationNumber)
+      console.log("장바구니 추가:", reservation.reservationNumber)
+      
+      setShowCartSuccessDialog(true)
+    } catch (error) {
+      console.error("장바구니 추가 실패:", error)
+      alert("장바구니 추가 중 오류가 발생했습니다. 다시 시도해주세요.")
+    }
   }
 
   const handleCartSuccessConfirm = () => {
     setShowCartSuccessDialog(false)
-    // 현재 페이지에 머물기 (아무 동작 안함)
   }
 
   const handleGoToCart = () => {
@@ -135,7 +271,24 @@ export default function ReservationPage() {
   }
 
   const handlePayment = () => {
-    router.push("/ticket/payment")
+    // sessionStorage에서 실제 예약 ID 가져오기
+    const storedReservationId = sessionStorage.getItem('currentReservationId')
+    
+    if (!storedReservationId) {
+      alert('예약 정보가 없습니다. 다시 시도해주세요.')
+      router.push('/ticket/search')
+      return
+    }
+    
+    // 예약 정보를 결제 페이지로 전달
+    const paymentParams = new URLSearchParams({
+      reservationId: storedReservationId,  // 숫자형 ID 전달
+      trainType: reservation?.trainType || "",
+      trainNumber: reservation?.trainNumber || "",
+      price: reservation?.price.toString() || "0",
+    })
+    
+    router.push(`/ticket/payment?${paymentParams.toString()}`)
   }
 
   const getTrainTypeColor = (trainType: string) => {
@@ -157,9 +310,19 @@ export default function ReservationPage() {
     return price.toLocaleString() + "원"
   }
 
-  if (!reservation) {
+  if (!reservation || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+        <header className="bg-white shadow-sm border-b">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center space-x-4">
+              <Link href="/" className="flex items-center space-x-2">
+                <Train className="h-8 w-8 text-blue-600" />
+                <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
+              </Link>
+            </div>
+          </div>
+        </header>
         <div className="container mx-auto px-4 py-16 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">예약 정보를 불러오고 있습니다...</p>

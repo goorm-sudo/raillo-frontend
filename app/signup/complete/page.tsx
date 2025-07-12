@@ -1,78 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import {useEffect, useState} from "react"
-import {useRouter, useSearchParams} from "next/navigation"
-import {Button} from "@/components/ui/button"
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
-import {AlertCircle, CheckCircle, CreditCard, Home, Printer, Train, User} from "lucide-react"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Train, Home, Printer, CheckCircle, User, CreditCard } from "lucide-react"
 
 export default function SignupCompletePage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const [memberNo, setMemberNo] = useState<string>('')
-  const [isValidAccess, setIsValidAccess] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    // localStorage에서 회원번호 가져오기
-    const storedMemberNo = localStorage.getItem('signupMemberNo')
-
-    if (!storedMemberNo) {
-      setIsValidAccess(false)
-      return
-    }
-
-    setMemberNo(storedMemberNo)
-    setIsValidAccess(true)
-  }, [])
-
-  // 로딩 중이거나 유효성 검사 중일 때
-  if (isValidAccess === null) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">페이지를 불러오는 중...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // 유효하지 않은 접근일 때
-  if (!isValidAccess) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <div className="max-w-md mx-auto">
-            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">접근 제한</h1>
-            <p className="text-gray-600 mb-8">
-              유효하지 않은 접근입니다.
-              <br />
-              회원가입 완료 후 이 페이지에 접근할 수 있습니다.
-            </p>
-            <div className="space-y-4">
-              <Link href="/signup">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                  회원가입하기
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="outline" className="w-full">
-                  홈으로 돌아가기
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-        <Footer />
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
@@ -147,7 +80,7 @@ export default function SignupCompletePage() {
               <div className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-700 mb-4">RAIL-O 멤버십 회원번호</h3>
                 <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-6">
-                  <p className="text-3xl font-bold text-red-600">{memberNo}</p>
+                  <p className="text-3xl font-bold text-red-600">1234567</p>
                 </div>
                 <p className="text-sm text-gray-500 mt-2">회원번호를 기억해 주세요. 로그인 시 필요합니다.</p>
               </div>
@@ -218,7 +151,46 @@ export default function SignupCompletePage() {
       </main>
 
       {/* Footer */}
-      <Footer />
+      <footer className="bg-gray-800 text-white py-8 mt-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="font-semibold mb-4">고객센터</h3>
+              <p className="text-sm text-gray-300">1544-7788</p>
+              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">빠른 링크</h3>
+              <ul className="space-y-2 text-sm text-gray-300">
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    이용약관
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    개인정보처리방침
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    사이트맵
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
+              <p className="text-sm text-gray-300">
+                한국철도공사는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

@@ -5,21 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// 개발용 토큰 자동 설정 함수
-export function setDevelopmentToken() {
-  if (typeof window === 'undefined') return false
-  
-  // 이미 토큰이 있으면 설정하지 않음
-  const existingToken = localStorage.getItem('accessToken')
-  if (existingToken) return false
-  
-  // 개발용 TEST001 계정 토큰 설정
-  const devToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJURVNUMDAxIiwiaWF0IjoxNzM1MzAzNzMzLCJleHAiOjk5OTk5OTk5OTksInVzZXJJZCI6IjEiLCJ1c2VybmFtZSI6IlRFU1QwMDEifQ.test'
-  localStorage.setItem('accessToken', devToken)
-  
-  console.log('🔧 개발용 토큰 자동 설정됨 - TEST001 계정')
-  return true
-}
 
 // JWT 토큰 디코딩 함수
 export function decodeJWT(token: string) {
@@ -44,9 +29,6 @@ export function decodeJWT(token: string) {
 // 로그인 상태 확인 함수
 export function getLoginInfo() {
   if (typeof window === 'undefined') return null
-  
-  // 개발용 토큰 자동 설정 시도
-  setDevelopmentToken()
   
   const token = localStorage.getItem('accessToken')
   if (!token) return null

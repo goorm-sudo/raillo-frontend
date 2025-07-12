@@ -1,38 +1,32 @@
 "use client"
 
 import Link from "next/link"
-import {useEffect, useState} from "react"
-import {Button} from "@/components/ui/button"
-import {Card, CardContent} from "@/components/ui/card"
-import {Badge} from "@/components/ui/badge"
-import {Collapsible, CollapsibleContent, CollapsibleTrigger} from "@/components/ui/collapsible"
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
-  Award,
-  ChevronDown,
-  CreditCard,
-  Lock,
-  Mail,
-  Settings,
-  Shield,
-  ShoppingCart,
-  Smartphone,
-  Star,
-  Ticket,
   Train,
+  ChevronLeft,
+  ChevronDown,
   User,
+  CreditCard,
+  Ticket,
+  ShoppingCart,
+  Settings,
+  Star,
+  Shield,
+  Smartphone,
+  Mail,
+  Lock,
+  Award,
 } from "lucide-react"
-import {tokenManager} from "@/lib/auth"
-import {useRouter} from "next/navigation"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
-import {getMemberInfo, MemberInfo} from "@/lib/api/user"
-import { useAuth } from "@/hooks/use-auth"
+import { getLoginInfo, isTokenExpired } from "@/lib/utils"
+import { mileageApi } from "@/lib/api/client"
+import UserInfoCard from "@/components/mypage/UserInfoCard"
 
 export default function MyPage() {
-  const { isChecking, isAuthenticated } = useAuth()
-  const [memberInfo, setMemberInfo] = useState<MemberInfo | null>(null)
-  const [loading, setLoading] = useState(true)
-  const router = useRouter()
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     ticketInfo: false,
     membershipPerformance: false,
@@ -40,42 +34,14 @@ export default function MyPage() {
     memberInfoManagement: false,
   })
 
-  useEffect(() => {
-    const fetchMemberInfo = async () => {
-      if (isAuthenticated) {
-        try {
-          const info = await getMemberInfo()
-          setMemberInfo(info)
-        } catch (error) {
-          console.error('회원 정보 조회 실패:', error)
-          // 에러 발생 시에도 페이지는 표시하되, 기본값 사용
-        } finally {
-          setLoading(false)
-        }
-      }
-    }
-
-    fetchMemberInfo()
-  }, [isAuthenticated])
-
-  // 로딩 중이거나 인증 확인 중일 때
-  if (isChecking || loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">페이지를 불러오는 중...</p>
-        </div>
-        <Footer />
-      </div>
-    )
-  }
-
-  // 로그인되지 않은 경우 (리다이렉트 중)
-  if (!isAuthenticated) {
-    return null
-  }
+  // 로그인 정보 상태
+  const [loginInfo, setLoginInfo] = useState<any>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userMileage, setUserMileage] = useState(0)
+  const [earningSchedules, setEarningSchedules] = useState<any[]>([])
+  const [delayCompensation, setDelayCompensation] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({
@@ -84,18 +50,203 @@ export default function MyPage() {
     }))
   }
 
-  // 회원 정보가 없을 때 기본값 사용
-  const displayName = memberInfo?.name || "회원"
-  const displayMemberId = memberInfo?.memberId || "로딩 중..."
-  const displayEmail = memberInfo?.email || "인증 필요"
-  const displayPhone = memberInfo?.phoneNumber || "인증 필요"
-  const displayGrade = memberInfo?.memberGrade || "일반"
-  const displayMileage = memberInfo?.mileage || 0
+  // 로그아웃 처리
+  const handleLogout = async () => {
+    const { globalLogout } = await import('@/lib/auth')
+    globalLogout('로그아웃되었습니다.')
+  }
+
+  // 로그인 정보 확인
+  const checkLoginStatus = () => {
+    try {
+      const accessToken = localStorage.getItem("accessToken")
+      
+      if (!accessToken) {
+        setIsLoggedIn(false)
+        setLoginInfo(null)
+        return
+      }
+
+      // JWT 토큰에서 사용자 정보 추출
+      try {
+        const tokenParts = accessToken.split('.')
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]))
+          
+          // 토큰이 만료되지 않았는지 확인
+          const currentTime = Math.floor(Date.now() / 1000)
+          if (payload.exp && payload.exp > currentTime) {
+            // 실제 JWT 토큰에서 사용자 정보 설정
+            const loginData = {
+              isLoggedIn: true,
+              userId: parseInt(payload.memberId) || parseInt(payload.userId) || 1,
+              username: payload.sub || "Unknown",
+              memberNo: payload.sub || "Unknown",
+              email: payload.email || "unknown@raillo.com",
+              exp: payload.exp
+            }
+            
+            setLoginInfo(loginData)
+            setIsLoggedIn(true)
+          } else {
+            // 토큰이 만료되었으면 로그아웃
+            localStorage.removeItem("accessToken")
+            localStorage.removeItem("refreshToken")
+            setIsLoggedIn(false)
+            setLoginInfo(null)
+          }
+        } else {
+          throw new Error("잘못된 토큰 형식")
+        }
+      } catch (error) {
+        // JWT 토큰 파싱 에러
+        localStorage.removeItem("accessToken")
+        localStorage.removeItem("refreshToken")
+        setIsLoggedIn(false)
+        setLoginInfo(null)
+      }
+    } catch (error) {
+      // 로그인 상태 확인 에러
+      setIsLoggedIn(false)
+      setLoginInfo(null)
+    }
+  }
+
+  // 마일리지 조회
+  const fetchUserMileage = async () => {
+    try {
+      if (!isLoggedIn) {
+        setUserMileage(0)
+        return
+      }
+
+      const response = await mileageApi.getMileageBalance()
+      
+      // API 응답 구조: { message: "...", result: { currentBalance: 10000, ... } }
+      const mileageAmount = response.result?.currentBalance || 0
+      setUserMileage(mileageAmount)
+      
+    } catch (error) {
+      // 마일리지 조회 실패 시 0으로 설정
+      setUserMileage(0)
+    }
+  }
+
+  // 적립 예정 마일리지 조회 (LocalFile 설계 반영)
+  const fetchEarningSchedules = async () => {
+    try {
+      if (!isLoggedIn) {
+        setEarningSchedules([])
+        setDelayCompensation([])
+        return
+      }
+
+      setLoading(true)
+      
+      // 적립 예정 내역 조회
+      const schedulesResponse = await mileageApi.getEarningSchedules()
+      setEarningSchedules(schedulesResponse.result || [])
+
+      // 지연 보상 내역 조회  
+      const compensationResponse = await mileageApi.getDelayCompensation()
+      setDelayCompensation(compensationResponse.result || [])
+      
+    } catch (error) {
+      setEarningSchedules([])
+      setDelayCompensation([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 컴포넌트 마운트 시 로그인 상태 확인
+  useEffect(() => {
+    const initializeAuth = async () => {
+      // localStorage에서 바로 사용자 정보 읽기 (깜빡임 방지)
+      const storedToken = localStorage.getItem('accessToken')
+      if (storedToken) {
+        try {
+          const tokenParts = storedToken.split('.')
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]))
+            const currentTime = Math.floor(Date.now() / 1000)
+            if (payload.exp && payload.exp > currentTime) {
+              const tempLoginData = {
+                isLoggedIn: true,
+                userId: parseInt(payload.memberId) || parseInt(payload.userId) || 1,
+                username: payload.sub || "Unknown",
+                memberNo: payload.sub || "Unknown",
+                email: payload.email || "unknown@raillo.com",
+                exp: payload.exp
+              }
+              setLoginInfo(tempLoginData)
+              setIsLoggedIn(true)
+            }
+          }
+        } catch (error) {
+          console.error('Token parsing error:', error)
+        }
+      }
+      
+      // 정식 로그인 상태 확인
+      checkLoginStatus()
+      
+      // 초기 로딩 종료
+      setTimeout(() => {
+        setIsInitialLoading(false)
+      }, 300) // 실무에서는 네트워크 응답 후 false로 설정
+    }
+    
+    initializeAuth()
+  }, [])
+
+  // 로그인 상태 변경 시 마일리지 조회
+  useEffect(() => {
+    if (isLoggedIn && !isInitialLoading) {
+      fetchUserMileage()
+      // 적립 예정 마일리지 관련 함수 호출 제거 (간단한 UI로 통일)
+      // fetchEarningSchedules()
+    }
+  }, [isLoggedIn, isInitialLoading])
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <Header />
+      <header className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link href="/" className="flex items-center space-x-2">
+                <Train className="h-8 w-8 text-blue-600" />
+                <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
+              </Link>
+              <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
+                <Link href="/" className="hover:text-blue-600">
+                  홈
+                </Link>
+                <span>{">"}</span>
+                <span className="text-blue-600">마이페이지</span>
+              </div>
+            </div>
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                <ChevronLeft className="h-4 w-4" />
+                <span>홈으로</span>
+              </Button>
+            </Link>
+            {isLoggedIn && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleLogout}
+                className="flex items-center space-x-2 ml-2"
+              >
+                <span>로그아웃</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      </header>
 
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
@@ -113,17 +264,13 @@ export default function MyPage() {
             </Card>
 
             {/* User Info Card */}
-            <Card className="mb-6">
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Badge variant="outline" className="text-xs">
-                    {displayGrade}
-                  </Badge>
-                </div>
-                <h3 className="font-bold text-lg">{displayName} 회원님</h3>
-                <p className="text-sm text-gray-600">마일리지: {displayMileage}P</p>
-              </CardContent>
-            </Card>
+            <UserInfoCard 
+              loginInfo={loginInfo}
+              isLoggedIn={isLoggedIn}
+              currentMileage={userMileage}
+              detailed={false} // 간단한 버전으로 통일
+              isInitialLoading={isInitialLoading}
+            />
 
             {/* Navigation Menu */}
             <Card>
@@ -219,12 +366,18 @@ export default function MyPage() {
                       />
                     </CollapsibleTrigger>
                     <CollapsibleContent className="bg-gray-50">
-                      <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
-                        <span>간편구매정보등록</span>
-                      </div>
-                      <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
-                        <span>간편현금결제 설정</span>
-                      </div>
+                      <Link
+                        href="/mypage/payment-history"
+                        className="flex items-center space-x-3 px-8 py-2 text-sm text-gray-600 hover:text-blue-600"
+                      >
+                        <span>결제 내역</span>
+                      </Link>
+                      <Link
+                        href="/mypage/saved-payment-methods"
+                        className="flex items-center space-x-3 px-8 py-2 text-sm text-gray-600 hover:text-blue-600"
+                      >
+                        <span>간편구매정보 등록</span>
+                      </Link>
                     </CollapsibleContent>
                   </Collapsible>
 
@@ -254,14 +407,20 @@ export default function MyPage() {
                       <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
                         <span>이메일/휴대폰 인증</span>
                       </div>
-                      <Link
-                        href="/mypage/withdraw"
-                        className="flex items-center space-x-3 px-8 py-2 text-sm text-gray-600 hover:text-blue-600"
-                      >
+                      <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
                         <span>회원탈퇴</span>
-                      </Link>
+                      </div>
                     </CollapsibleContent>
                   </Collapsible>
+
+                  {/* 장바구니 */}
+                  <Link
+                    href="/cart"
+                    className="flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <ShoppingCart className="h-5 w-5 text-gray-600" />
+                    <span>장바구니</span>
+                  </Link>
                 </nav>
               </CardContent>
             </Card>
@@ -276,29 +435,33 @@ export default function MyPage() {
 
             <Card>
               <CardContent className="p-6">
-                <div className="space-y-2">
+                <div className="space-y-6">
                   {/* 회원명 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">회원명</div>
                     <div className="md:col-span-2">
-                      <span className="text-lg">{displayName}</span>
+                      <span className="text-lg">
+                        {isLoggedIn && loginInfo ? loginInfo.username : '로그인이 필요합니다'}
+                      </span>
                     </div>
                   </div>
 
                   {/* 멤버십 번호 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">멤버십 번호</div>
                     <div className="md:col-span-2">
-                      <span className="text-lg">{displayMemberId}</span>
+                      <span className="text-lg">
+                        {isLoggedIn && loginInfo ? `RAILLO${loginInfo.userId.toString().padStart(6, '0')}` : '-'}
+                      </span>
                     </div>
                   </div>
 
                   {/* 비밀번호 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">비밀번호</div>
                     <div className="md:col-span-2">
                       <Link href="/mypage/password/verify">
-                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
+                        <Button variant="outline" size="sm" className="rounded-full">
                           <Lock className="h-4 w-4 mr-2" />
                           비밀번호 변경
                         </Button>
@@ -307,11 +470,11 @@ export default function MyPage() {
                   </div>
 
                   {/* 이메일 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">이메일</div>
                     <div className="md:col-span-2">
                       <Link href="/mypage/contact/verify">
-                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
+                        <Button variant="outline" size="sm" className="rounded-full">
                           <Mail className="h-4 w-4 mr-2" />
                           이메일 인증/변경
                         </Button>
@@ -320,11 +483,11 @@ export default function MyPage() {
                   </div>
 
                   {/* 휴대폰 번호 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">휴대폰 번호</div>
                     <div className="md:col-span-2">
                       <Link href="/mypage/contact/verify">
-                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
+                        <Button variant="outline" size="sm" className="rounded-full">
                           <Smartphone className="h-4 w-4 mr-2" />
                           휴대폰 인증/변경
                         </Button>
@@ -333,11 +496,11 @@ export default function MyPage() {
                   </div>
 
                   {/* 카카오톡 간편로그인 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">카카오톡 간편로그인</div>
                     <div className="md:col-span-2 flex items-center space-x-4">
                       <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
+                        <Button variant="outline" size="sm" className="text-xs">
                           연동해제
                         </Button>
                         <span className="text-red-500 text-sm">연동</span>
@@ -346,11 +509,11 @@ export default function MyPage() {
                   </div>
 
                   {/* APPLE ID 간편로그인 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">APPLE ID 간편로그인</div>
                     <div className="md:col-span-2 flex items-center space-x-4">
                       <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
+                        <Button variant="outline" size="sm" className="text-xs">
                           로그인
                         </Button>
                         <span className="text-red-500 text-sm">미연동</span>
@@ -359,24 +522,24 @@ export default function MyPage() {
                   </div>
 
                   {/* 회원등급 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">회원등급</div>
                     <div className="md:col-span-2 flex items-center space-x-2">
                       <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                        {displayGrade}
+                        비즈니스
                       </Badge>
-                      <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
+                      <Button variant="outline" size="sm" className="text-xs rounded-full">
                         혜택
                       </Button>
                     </div>
                   </div>
 
                   {/* KTX 마일리지/포인트 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5 border-b border-gray-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4 border-b">
                     <div className="font-medium text-gray-700">KTX 마일리지/포인트</div>
                     <div className="md:col-span-2 flex items-center space-x-2">
-                      <span className="text-lg font-semibold text-blue-600">{displayMileage}</span>
-                      <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
+                      <span className="text-lg font-semibold text-blue-600">{userMileage.toLocaleString()}</span>
+                      <Button variant="outline" size="sm" className="text-xs rounded-full">
                         <Award className="h-3 w-3 mr-1" />
                         내역보기
                       </Button>
@@ -384,10 +547,10 @@ export default function MyPage() {
                   </div>
 
                   {/* 간편현금결제 설정 */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-5">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center py-4">
                     <div className="font-medium text-gray-700">간편현금결제 설정</div>
                     <div className="md:col-span-2">
-                      <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-full">
+                      <Button variant="outline" size="sm" className="rounded-full">
                         <Shield className="h-4 w-4 mr-2" />
                         설정
                       </Button>
@@ -401,7 +564,46 @@ export default function MyPage() {
       </div>
 
       {/* Footer */}
-      <Footer />
+      <footer className="bg-gray-800 text-white py-8 mt-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="font-semibold mb-4">고객센터</h3>
+              <p className="text-sm text-gray-300">1544-7788</p>
+              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">빠른 링크</h3>
+              <ul className="space-y-2 text-sm text-gray-300">
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    이용약관
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    개인정보처리방침
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    사이트맵
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
+              <p className="text-sm text-gray-300">
+                RAIL-O는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

@@ -21,19 +21,13 @@ import {
   ShoppingCart,
   Settings,
   Star,
-  Shield,
-  Smartphone,
-  Mail,
-  Lock,
-  Award,
   Plus,
   Trash2,
-  CheckCircle,
-  AlertCircle,
   Building,
   Eye,
   EyeOff,
 } from "lucide-react"
+import UserInfoCard from "@/components/mypage/UserInfoCard"
 import { savedPaymentMethodApi, mileageApi } from "@/lib/api/client"
 import { getLoginInfo, isTokenExpired } from "@/lib/utils"
 
@@ -78,6 +72,7 @@ export default function SavedPaymentMethodsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [newMethodType, setNewMethodType] = useState<'CREDIT_CARD' | 'BANK_ACCOUNT'>('CREDIT_CARD')
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  
 
   // 새 결제 수단 폼 데이터 (카드번호 4자리씩 분할)
   const [newMethodForm, setNewMethodForm] = useState({
@@ -102,100 +97,109 @@ export default function SavedPaymentMethodsPage() {
 
   // 로그인 정보 확인
   useEffect(() => {
-    const checkLoginStatus = () => {
-      // 강제로 개발용 토큰 설정
-      const devToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJURVNUMDAxIiwiaWF0IjoxNzM1MzAzNzMzLCJleHAiOjk5OTk5OTk5OTksInVzZXJJZCI6IjEiLCJ1c2VybmFtZSI6IlRFU1QwMDEifQ.test'
-      localStorage.setItem('accessToken', devToken)
-      
-      // 개발용 로그인 정보 설정
-      const mockLoginInfo = {
-        isLoggedIn: true,
-        userId: 1,
-        username: 'TEST001',
-        memberNo: 'RAILLO000001',
-        email: 'test001@example.com',
-        exp: 99999999999
-      }
-      
-      setLoginInfo(mockLoginInfo)
-      setIsLoggedIn(true)
-      
-      // 마일리지 및 저장된 결제수단 조회
-      fetchUserMileage(1)
-      fetchSavedPaymentMethods(1)
-    }
+    // 토큰 유효성 검증
+    const accessToken = localStorage.getItem('accessToken')
     
+    if (!accessToken) {
+      // 토큰이 없습니다. 로그인 페이지로 이동
+      setTimeout(() => {
+        window.alert('로그인이 필요합니다.')
+        window.location.href = '/login'
+      }, 100)
+      return
+    }
+
+    // JWT 토큰 만료 시간 확인
+    try {
+      const tokenParts = accessToken.split('.')
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]))
+        const currentTime = Math.floor(Date.now() / 1000)
+        
+        if (payload.exp && payload.exp < currentTime) {
+          // 토큰이 만료되었습니다.
+          localStorage.removeItem('accessToken')
+          localStorage.removeItem('refreshToken')
+          setTimeout(() => {
+            window.alert('세션이 만료되었습니다. 다시 로그인해주세요.')
+            window.location.href = '/login'
+          }, 100)
+          return
+        }
+      }
+    } catch (error) {
+      // 토큰 파싱 에러
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      setTimeout(() => {
+        window.alert('인증 오류가 발생했습니다. 다시 로그인해주세요.')
+        window.location.href = '/login'
+      }, 100)
+      return
+    }
+
     checkLoginStatus()
   }, [])
 
-  // 사용자 마일리지 조회
-  const fetchUserMileage = async (userId: number) => {
+  // 로그인 상태 변경 시 데이터 조회
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchSavedPaymentMethods()
+      fetchUserMileage()
+    }
+  }, [isLoggedIn])
+
+  // 마일리지 조회
+  const fetchUserMileage = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
-      
-      const response = await fetch(`http://localhost:8080/api/v1/mileage/balance/${userId}/simple`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        
-        // API 응답 구조: { message: "...", result: { currentBalance: 10000, ... } }
-        const mileageAmount = data.result?.currentBalance || data.currentBalance || 0
-        setUserMileage(mileageAmount)
-      } else {
-        const errorText = await response.text()
-        console.error('❌ 마일리지 조회 실패:', response.status, response.statusText, errorText)
+      if (!isLoggedIn) {
         setUserMileage(0)
+        return
       }
+
+      const response = await mileageApi.getMileageBalance()
+      
+      // API 응답 구조: { message: "...", result: { currentBalance: 10000, ... } }
+      const mileageAmount = response.result?.currentBalance || 0
+      setUserMileage(mileageAmount)
+      
     } catch (error) {
-      console.error('❌ 마일리지 조회 에러:', error)
+      // 마일리지 조회 에러
       setUserMileage(0)
     }
   }
 
+
   // 저장된 결제수단 조회
-  const fetchSavedPaymentMethods = async (userId: number) => {
+  const fetchSavedPaymentMethods = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
+      if (!isLoggedIn) {
+        setSavedMethods(null)
+        return
+      }
+
+      // 저장된 결제수단 조회
+      const response = await savedPaymentMethodApi.getSavedPaymentMethods()
       
-      const response = await fetch(`http://localhost:8080/api/v1/saved-payment-methods?memberId=${userId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        
-        // 신용카드와 계좌 분리
-        const creditCards = data.filter((item: any) => item.paymentMethodType === 'CREDIT_CARD')
-        const bankAccounts = data.filter((item: any) => item.paymentMethodType === 'BANK_ACCOUNT')
-        
+      // 백엔드에서 직접 배열을 반환하므로 그대로 사용
+      if (Array.isArray(response)) {
         setSavedMethods({
-          savedPaymentMethods: creditCards.concat(bankAccounts),
-          totalCount: creditCards.length + bankAccounts.length,
+          savedPaymentMethods: response,
+          totalCount: response.length,
         })
       } else {
-        const errorText = await response.text()
-        console.error('❌ 저장된 결제수단 조회 실패:', response.status, response.statusText, errorText)
-        setSavedMethods({
-          savedPaymentMethods: [],
-          totalCount: 0,
-        })
+        // 예상하지 못한 응답 구조
+        setSavedMethods(null)
       }
-    } catch (error) {
-      console.error('❌ 저장된 결제수단 조회 에러:', error)
-      setSavedMethods({
-        savedPaymentMethods: [],
-        totalCount: 0,
-      })
+      
+    } catch (error: any) {
+      // 저장된 결제수단 조회 실패
+      setSavedMethods(null)
+      
+      // 401/403 에러 시 자동 로그아웃 처리는 API 클라이언트에서 자동 처리됨
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        // 인증 에러 - 자동 토큰 갱신 시도 중
+      }
     }
   }
 
@@ -237,21 +241,19 @@ export default function SavedPaymentMethodsPage() {
   const handleSavePaymentMethod = async () => {
     setAlert(null)
     try {
-      if (!isLoggedIn || !loginInfo) {
+      if (!isLoggedIn) {
         setAlert({ type: 'error', message: '로그인이 필요합니다.' });
         return;
       }
 
-      // userId 타입 확인 및 변환
-      const userId = typeof loginInfo.userId === 'string' ? parseInt(loginInfo.userId) : loginInfo.userId
-
-      // 카드번호 합치기
+      // 카드번호 합치기 (신용카드인 경우만)
       const fullCardNumber = newMethodType === 'CREDIT_CARD' 
         ? `${newMethodForm.cardNumber1}${newMethodForm.cardNumber2}${newMethodForm.cardNumber3}${newMethodForm.cardNumber4}`
         : '';
 
+      // 백엔드 SavedPaymentMethodRequestDto 구조에 맞춘 요청 데이터
+      // memberId는 JWT에서 자동 추출되므로 제거
       const requestData = {
-        memberId: userId,
         paymentMethodType: newMethodType,
         alias: newMethodForm.alias,
         ...(newMethodType === 'CREDIT_CARD' ? {
@@ -269,48 +271,85 @@ export default function SavedPaymentMethodsPage() {
         isDefault: newMethodForm.isDefault,
       };
 
-      const response = await savedPaymentMethodApi.savePaymentMethod(requestData);
+      // 결제수단 저장 요청
+
+      // JWT 기반 저장 API 호출 (memberId 자동 추출)
+      const response = await savedPaymentMethodApi.addSavedPaymentMethod(requestData);
+
+      // 결제수단 저장 성공
 
       setAlert({ type: 'success', message: '결제 수단이 성공적으로 저장되었습니다.' });
       setIsDialogOpen(false);
       resetForm();
       
       // 저장 후 즉시 목록 새로고침
-      await fetchSavedPaymentMethods(userId);
-    } catch (error) {
-      console.error('❌ 결제 수단 저장 실패:', error);
-      setAlert({ type: 'error', message: '결제 수단 저장에 실패했습니다.' });
+      await fetchSavedPaymentMethods();
+    } catch (error: any) {
+      // 결제 수단 저장 실패
+      
+      // 구체적인 에러 메시지 표시
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.errorMessage || 
+                          '결제 수단 저장에 실패했습니다.';
+      setAlert({ type: 'error', message: errorMessage });
     }
   }
 
-  // 결제 수단 삭제
+  // 결제 수단 삭제 (JWT 기반)
   const handleDeletePaymentMethod = async (methodId: number) => {
-    if (!confirm('이 결제 수단을 삭제하시겠습니까?')) return;
+    if (!confirm('정말로 이 결제 수단을 삭제하시겠습니까?')) {
+      return;
+    }
 
     try {
-      await savedPaymentMethodApi.deletePaymentMethod(methodId);
+      // 결제수단 삭제 요청
+      
+      // JWT에서 memberId 자동 추출하는 삭제 API 호출
+      await savedPaymentMethodApi.deleteSavedPaymentMethod(methodId);
+      
+      // 결제수단 삭제 성공
+      
       setAlert({ type: 'success', message: '결제 수단이 삭제되었습니다.' });
-      fetchSavedPaymentMethods(typeof loginInfo.userId === 'string' ? parseInt(loginInfo.userId) : loginInfo.userId);
-    } catch (error) {
-      console.error('결제 수단 삭제 실패:', error);
-      setAlert({ type: 'error', message: '결제 수단 삭제에 실패했습니다.' });
+      fetchSavedPaymentMethods();
+    } catch (error: any) {
+      // 결제 수단 삭제 실패
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.errorMessage || 
+                          '결제 수단 삭제에 실패했습니다.';
+      setAlert({ type: 'error', message: errorMessage });
     }
   }
 
-  // 기본 결제 수단 설정
+  // 기본 결제 수단 설정 (JWT 기반) - 백엔드 API 구현됨
   const handleSetDefaultPaymentMethod = async (methodId: number) => {
     try {
-      if (!isLoggedIn || !loginInfo) {
-        setAlert({ type: 'error', message: '로그인이 필요합니다.' });
-        return;
-      }
+      // 기본 결제수단 설정 요청
+      
+      // JWT에서 memberId 자동 추출하는 기본 설정 API 호출
+      // 백엔드: PUT /api/v1/saved-payment-methods/{paymentMethodId}/default
+      const response = await fetch(`http://localhost:8080/api/v1/saved-payment-methods/${methodId}/default`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      await savedPaymentMethodApi.setDefaultPaymentMethod(methodId, loginInfo.userId);
-      setAlert({ type: 'success', message: '기본 결제 수단이 설정되었습니다.' });
-      fetchSavedPaymentMethods(typeof loginInfo.userId === 'string' ? parseInt(loginInfo.userId) : loginInfo.userId);
-    } catch (error) {
-      console.error('기본 결제 수단 설정 실패:', error);
-      setAlert({ type: 'error', message: '기본 결제 수단 설정에 실패했습니다.' });
+      if (response.ok) {
+        // 기본 결제수단 설정 성공
+        setAlert({ type: 'success', message: '기본 결제 수단이 설정되었습니다.' });
+        fetchSavedPaymentMethods();
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error: any) {
+      // 기본 결제 수단 설정 실패
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.errorMessage || 
+                          '기본 결제 수단 설정에 실패했습니다.';
+      setAlert({ type: 'error', message: errorMessage });
     }
   }
 
@@ -375,6 +414,37 @@ export default function SavedPaymentMethodsPage() {
     return `**** **** **** ${cardNumber.slice(-4)}`
   }
 
+  // 로그인 상태 확인
+  const checkLoginStatus = () => {
+    const accessToken = localStorage.getItem('accessToken')
+    
+    if (accessToken) {
+      try {
+        const tokenParts = accessToken.split('.')
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]))
+          
+          setLoginInfo({
+            isLoggedIn: true,
+            userId: payload.memberId || 1,
+            username: payload.sub || 'TEST001',
+            memberNo: payload.sub || 'TEST001',
+            email: 'test@example.com',
+            exp: payload.exp
+          })
+          setIsLoggedIn(true)
+        }
+      } catch (error) {
+        // 토큰 파싱 에러
+        setIsLoggedIn(false)
+        setLoginInfo(null)
+      }
+    } else {
+      setIsLoggedIn(false)
+      setLoginInfo(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -424,24 +494,11 @@ export default function SavedPaymentMethodsPage() {
             </Card>
 
             {/* User Info Card */}
-            <Card className="mb-6">
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Badge variant="outline" className="text-xs">
-                    비즈니스
-                  </Badge>
-                </div>
-                <h3 className="font-bold text-lg">
-                  {isLoggedIn && loginInfo ? loginInfo.username + ' 회원님' : '게스트 님'}
-                </h3>
-                <p className="text-sm text-gray-600">마일리지: {userMileage.toLocaleString()}P</p>
-                {isLoggedIn && loginInfo && (
-                  <p className="text-xs text-gray-500">
-                    멤버십 번호: RAILLO{loginInfo.userId.toString().padStart(6, '0')}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <UserInfoCard 
+              loginInfo={loginInfo}
+              isLoggedIn={isLoggedIn}
+              currentMileage={userMileage}
+            />
 
             {/* Navigation Menu */}
             <Card>
@@ -646,13 +703,15 @@ export default function SavedPaymentMethodsPage() {
                       <>
                         <div className="grid grid-cols-4 gap-2">
                           <div>
-                            <Label htmlFor="cardNumber1">카드번호</Label>
+                            <Label htmlFor="cardNumber1" className="sr-only">카드번호 1</Label>
                             <Input
                               id="cardNumber1"
                               type="text"
                               value={newMethodForm.cardNumber1}
                               onChange={(e) => handleCardNumberChange(0, e.target.value)}
                               maxLength={4}
+                              placeholder="1234"
+                              className="h-10"
                             />
                           </div>
                           <div>
@@ -663,6 +722,8 @@ export default function SavedPaymentMethodsPage() {
                               value={newMethodForm.cardNumber2}
                               onChange={(e) => handleCardNumberChange(1, e.target.value)}
                               maxLength={4}
+                              placeholder="5678"
+                              className="h-10"
                             />
                           </div>
                           <div>
@@ -673,6 +734,8 @@ export default function SavedPaymentMethodsPage() {
                               value={newMethodForm.cardNumber3}
                               onChange={(e) => handleCardNumberChange(2, e.target.value)}
                               maxLength={4}
+                              placeholder="9012"
+                              className="h-10"
                             />
                           </div>
                           <div>
@@ -683,8 +746,15 @@ export default function SavedPaymentMethodsPage() {
                               value={newMethodForm.cardNumber4}
                               onChange={(e) => handleCardNumberChange(3, e.target.value)}
                               maxLength={4}
+                              placeholder="3456"
+                              className="h-10"
                             />
                           </div>
+                        </div>
+                        
+                        {/* 카드번호 안내 텍스트 추가 */}
+                        <div className="text-sm text-gray-500 -mt-2">
+                          카드번호 16자리를 입력해주세요
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">

@@ -30,14 +30,28 @@ import {
   Receipt,
   Eye,
   Download,
+  TestTube,
+  Clock,
 } from "lucide-react"
-import { paymentApi } from "@/lib/api/client"
+import { paymentHistoryApi } from "@/lib/api/client"
 import { getLoginInfo, isTokenExpired } from "@/lib/utils"
+import { useRouter } from "next/navigation"
+import UserInfoCard from "@/components/mypage/UserInfoCard"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { toast } from "@/components/ui/use-toast"
 
 interface PaymentHistoryItem {
   paymentId: number;
   reservationId: number;
   externalOrderId: string;
+  trainScheduleId?: number;
   amountOriginalTotal: number;
   totalDiscountAmountApplied: number;
   mileagePointsUsed: number;
@@ -48,6 +62,8 @@ interface PaymentHistoryItem {
   paymentMethod: string;
   pgProvider: string;
   pgApprovalNo: string;
+  hasRefund: boolean;
+  refundStatus?: string;
   paidAt: string;
   createdAt: string;
   mileageSummary?: {
@@ -66,6 +82,7 @@ interface PaymentHistoryResponse {
 }
 
 export default function PaymentHistoryPage() {
+  const router = useRouter()
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     ticketInfo: false,
     membershipPerformance: false,
@@ -76,6 +93,10 @@ export default function PaymentHistoryPage() {
   // 로그인 정보 상태
   const [loginInfo, setLoginInfo] = useState<any>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  
+  // 마일리지 상태 추가
+  const [currentMileage, setCurrentMileage] = useState(0)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -85,6 +106,14 @@ export default function PaymentHistoryPage() {
     paymentMethod: 'all',
   })
 
+  // 테스트 모달 상태
+  const [testModalOpen, setTestModalOpen] = useState(false)
+  const [selectedPayment, setSelectedPayment] = useState<PaymentHistoryItem | null>(null)
+  const [testMode, setTestMode] = useState<'ontime' | 'delay'>('ontime')
+  const [delayMinutes, setDelayMinutes] = useState(0)
+  const [trainScheduleId, setTrainScheduleId] = useState('')
+  const [testLoading, setTestLoading] = useState(false)
+
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({
       ...prev,
@@ -93,30 +122,123 @@ export default function PaymentHistoryPage() {
   }
 
   // 로그인 정보 확인
-  const checkLoginStatus = () => {
-    // 강제로 개발용 토큰 설정
-    const devToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJURVNUMDAxIiwiaWF0IjoxNzM1MzAzNzMzLCJleHAiOjk5OTk5OTk5OTksInVzZXJJZCI6IjEiLCJ1c2VybmFtZSI6IlRFU1QwMDEifQ.test'
-    localStorage.setItem('accessToken', devToken)
+  const checkLoginStatus = async () => {
+    try {
+      const accessToken = localStorage.getItem("accessToken")
+      
+      if (!accessToken) {
+        setIsLoggedIn(false)
+        setLoginInfo(null)
+        return
+      }
 
-    // 개발용 로그인 정보 설정
-    const mockLoginInfo = {
-      isLoggedIn: true,
-      userId: 1,
-      username: 'TEST001',
-      memberNo: 'RAILLO000001',
-      email: 'test001@example.com',
-      exp: 99999999999
+      // JWT 토큰에서 사용자 정보 추출
+      try {
+        const tokenParts = accessToken.split('.')
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]))
+          
+          // 토큰이 만료되지 않았는지 확인
+          const currentTime = Math.floor(Date.now() / 1000)
+          if (payload.exp && payload.exp > currentTime) {
+            // 실제 JWT 토큰에서 사용자 정보 설정
+            const loginData = {
+              isLoggedIn: true,
+              userId: parseInt(payload.memberId) || parseInt(payload.userId) || 1,
+              username: payload.sub || "Unknown",
+              memberNo: payload.sub || "Unknown",
+              email: payload.email || "unknown@raillo.com",
+              exp: payload.exp
+            }
+            
+            setLoginInfo(loginData)
+            setIsLoggedIn(true)
+          } else {
+            // 토큰이 만료되었으면 전역 로그아웃
+            const { handleSessionExpiry } = await import('@/lib/auth')
+            handleSessionExpiry()
+          }
+        } else {
+          throw new Error("잘못된 토큰 형식")
+        }
+      } catch (error) {
+        // JWT 토큰 파싱 에러
+        const { handleSessionExpiry } = await import('@/lib/auth')
+        handleSessionExpiry()
+      }
+    } catch (error) {
+      // 로그인 상태 확인 에러
+      setIsLoggedIn(false)
+      setLoginInfo(null)
+    }
+  }
+
+  // 컴포넌트 마운트 시 로그인 상태 확인
+  useEffect(() => {
+    const initializeAuth = async () => {
+      // localStorage에서 바로 사용자 정보 읽기 (깜빡임 방지)
+      const storedToken = localStorage.getItem('accessToken')
+      if (storedToken) {
+        try {
+          const tokenParts = storedToken.split('.')
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]))
+            const currentTime = Math.floor(Date.now() / 1000)
+            if (payload.exp && payload.exp > currentTime) {
+              const tempLoginData = {
+                isLoggedIn: true,
+                userId: parseInt(payload.memberId) || parseInt(payload.userId) || 1,
+                username: payload.sub || "Unknown",
+                memberNo: payload.sub || "Unknown",
+                email: payload.email || "unknown@raillo.com",
+                exp: payload.exp
+              }
+              setLoginInfo(tempLoginData)
+              setIsLoggedIn(true)
+            }
+          }
+        } catch (error) {
+          // Token parsing error
+        }
+      }
+      
+      // 전역 토큰 검증 함수 사용
+      const checkAuth = async () => {
+        const { validateToken } = await import('@/lib/auth')
+        
+        if (!validateToken()) {
+          // validateToken 함수 내에서 이미 리다이렉트 처리됨
+          return
+        }
+        
+        // 토큰이 유효하면 로그인 상태 설정
+        await checkLoginStatus()
+      }
+      
+      await checkAuth()
+      
+      // 초기 로딩 종료
+      setTimeout(() => {
+        setIsInitialLoading(false)
+      }, 300)
     }
     
-    setLoginInfo(mockLoginInfo)
-    setIsLoggedIn(true)
-  }
+    initializeAuth()
+  }, [])
+
+  // 로그인 상태 변경 시 결제 내역 조회
+  useEffect(() => {
+    if (isLoggedIn && !isInitialLoading) {
+      fetchPaymentHistory()
+      fetchMileageInfo() // 마일리지 정보도 함께 조회
+    }
+  }, [isLoggedIn, searchParams, isInitialLoading])
 
   // 결제 내역 조회
   const fetchPaymentHistory = async () => {
     setLoading(true)
     try {
-      if (!isLoggedIn || !loginInfo?.userId) {
+      if (!isLoggedIn) {
         setPaymentHistory({
           payments: [],
           totalElements: 0,
@@ -127,34 +249,29 @@ export default function PaymentHistoryPage() {
         return;
       }
 
-      const memberId = parseInt(loginInfo.userId.toString());
-      const token = localStorage.getItem('accessToken');
+      // 올바른 API 호출 (JWT에서 memberId 자동 추출)
+      let response;
       
-      // URL 파라미터 구성
-      let apiUrl = `http://localhost:8080/api/v1/payments/history?memberId=${memberId}&startDate=${searchParams.startDate}T00:00:00&endDate=${searchParams.endDate}T23:59:59`;
-      
-      // 결제방법이 "all"이 아닌 경우에만 paymentMethod 파라미터 추가
-      if (searchParams.paymentMethod !== 'all') {
-        apiUrl += `&paymentMethod=${searchParams.paymentMethod}`;
+      if (searchParams.paymentMethod === 'all') {
+        // 전체 결제 내역 조회
+        response = await paymentHistoryApi.getMemberPaymentHistory(0, 20);
+      } else {
+        // 기간별 조회 (결제방법 필터 포함)
+        const startDateTime = `${searchParams.startDate}T00:00:00`;
+        const endDateTime = `${searchParams.endDate}T23:59:59`;
+        
+        response = await paymentHistoryApi.getMemberPaymentHistoryByDateRange(
+          startDateTime,
+          endDateTime,
+          searchParams.paymentMethod,
+          0,
+          20
+        );
       }
       
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      setPaymentHistory(response.result || response);
       
-      setPaymentHistory(data);
     } catch (error) {
-      console.error('❌ 결제 내역 조회 실패:', error);
       // 에러 시 빈 데이터로 설정
       setPaymentHistory({
         payments: [],
@@ -168,17 +285,29 @@ export default function PaymentHistoryPage() {
     }
   }
 
-  // 컴포넌트 마운트 시 로그인 상태 확인
-  useEffect(() => {
-    checkLoginStatus();
-  }, []);
+  // 마일리지 정보 조회 함수 추가
+  const fetchMileageInfo = async () => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) {
+        console.warn('토큰이 없어 마일리지 조회를 건너뜁니다')
+        return
+      }
 
-  // 로그인 상태 변경 시 결제 내역 조회
-  useEffect(() => {
-    if (loginInfo) {
-      fetchPaymentHistory();
+      const { mileageApi } = await import('@/lib/api/client')
+      const response = await mileageApi.getMileageBalance()
+      
+      if (response && response.result) {
+        const { currentBalance } = response.result
+        setCurrentMileage(currentBalance)
+        
+      } else {
+        setCurrentMileage(0)
+      }
+    } catch (error) {
+      setCurrentMileage(0)
     }
-  }, [loginInfo, isLoggedIn]);
+  }
 
   // 결제 상태에 따른 배지 색상
   const getStatusBadgeVariant = (status: string) => {
@@ -230,6 +359,98 @@ export default function PaymentHistoryPage() {
     });
   }
 
+  // 환불 가능 여부 확인
+  const isRefundable = (payment: PaymentHistoryItem) => {
+    // 결제 상태가 성공이고, 아직 환불되지 않은 경우만 환불 가능
+    const isPaymentSuccess = payment.paymentStatus === 'SUCCESS' || payment.paymentStatus === 'COMPLETED'
+    const isNotRefunded = !payment.hasRefund || (payment.refundStatus && payment.refundStatus === 'FAILED')
+    
+    return isPaymentSuccess && isNotRefunded
+  }
+
+  // 환불 신청 버튼 클릭
+  const handleRefundClick = (paymentId: number) => {
+    router.push(`/ticket/refund?paymentId=${paymentId}`)
+  }
+
+  // 테스트 버튼 클릭
+  const handleTestArrival = async (payment: PaymentHistoryItem) => {
+    setSelectedPayment(payment)
+    setTestModalOpen(true)
+    
+    // Payment 데이터에서 직접 trainScheduleId 사용
+    if (payment.trainScheduleId) {
+      setTrainScheduleId(payment.trainScheduleId.toString())
+    } else {
+      // trainScheduleId가 없는 경우 경고
+      toast({
+        title: "주의",
+        description: "이 결제 건에는 열차 스케줄 ID가 없습니다. 수동으로 입력해주세요.",
+        variant: "destructive"
+      })
+      setTrainScheduleId('')
+    }
+  }
+
+  // 테스트 실행
+  const executeTest = async () => {
+    if (!selectedPayment || !trainScheduleId) return
+
+    setTestLoading(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) {
+        toast({
+          title: "인증 오류",
+          description: "로그인이 필요합니다.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const actualArrivalTime = new Date().toISOString()
+      const url = testMode === 'ontime' 
+        ? `/api/v1/mileage/admin/train/${trainScheduleId}/arrival`
+        : `/api/v1/mileage/admin/train/${trainScheduleId}/delay`
+
+      const params = new URLSearchParams({
+        actualArrivalTime: actualArrivalTime,
+        ...(testMode === 'delay' && { delayMinutes: delayMinutes.toString() })
+      })
+
+      const response = await fetch(`http://localhost:8080${url}?${params}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: "테스트 성공",
+          description: data.result || "열차 도착 이벤트가 성공적으로 전송되었습니다.",
+        })
+        setTestModalOpen(false)
+        // 마일리지 정보 새로고침
+        fetchMileageInfo()
+      } else {
+        throw new Error(data.message || '테스트 실행 실패')
+      }
+    } catch (error) {
+      console.error('테스트 실행 오류:', error)
+      toast({
+        title: "테스트 실패",
+        description: error instanceof Error ? error.message : "테스트 실행 중 오류가 발생했습니다.",
+        variant: "destructive",
+      })
+    } finally {
+      setTestLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -279,19 +500,12 @@ export default function PaymentHistoryPage() {
             </Card>
 
             {/* User Info Card */}
-            <Card className="mb-6">
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Badge variant="outline" className="text-xs">
-                    비즈니스
-                  </Badge>
-                </div>
-                <h3 className="font-bold text-lg">
-                  {isLoggedIn && loginInfo ? `${loginInfo.username} 회원님` : '게스트 님'}
-                </h3>
-                <p className="text-sm text-gray-600">마일리지: 10,000P</p>
-              </CardContent>
-            </Card>
+            <UserInfoCard 
+              loginInfo={loginInfo}
+              isLoggedIn={isLoggedIn}
+              currentMileage={currentMileage}
+              isInitialLoading={isInitialLoading}
+            />
 
             {/* Navigation Menu */}
             <Card>
@@ -543,7 +757,7 @@ export default function PaymentHistoryPage() {
                           <TableHead>결제금액</TableHead>
                           <TableHead>마일리지</TableHead>
                           <TableHead>상태</TableHead>
-                          <TableHead>상세</TableHead>
+                          <TableHead>관리</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -599,23 +813,81 @@ export default function PaymentHistoryPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={getStatusBadgeVariant(payment.paymentStatus)}>
-                                {payment.paymentStatus === 'SUCCESS' ? '결제완료' : 
-                                 payment.paymentStatus === 'FAILED' ? '결제실패' : 
-                                 payment.paymentStatus === 'PENDING' ? '결제대기' : payment.paymentStatus}
-                              </Badge>
+                              <div className="flex flex-col gap-1">
+                                <Badge variant={getStatusBadgeVariant(payment.paymentStatus)}>
+                                  {payment.paymentStatus === 'SUCCESS' ? '결제완료' : 
+                                   payment.paymentStatus === 'FAILED' ? '결제실패' : 
+                                   payment.paymentStatus === 'PENDING' ? '결제대기' : payment.paymentStatus}
+                                </Badge>
+                                {payment.hasRefund && payment.refundStatus && (
+                                  <Badge 
+                                    variant={
+                                      payment.refundStatus === 'COMPLETED' ? 'outline' :
+                                      payment.refundStatus === 'PROCESSING' ? 'secondary' :
+                                      payment.refundStatus === 'FAILED' ? 'destructive' : 'default'
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {payment.refundStatus === 'COMPLETED' ? '환불완료' :
+                                     payment.refundStatus === 'PROCESSING' ? '환불처리중' :
+                                     payment.refundStatus === 'PENDING' ? '환불대기' :
+                                     payment.refundStatus === 'FAILED' ? '환불실패' : payment.refundStatus}
+                                  </Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  // 결제 상세 정보 조회 로직 추가 예정
-                                }}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                상세
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    // 결제 상세 정보 조회 로직 추가 예정
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  상세
+                                </Button>
+                                {isRefundable(payment) ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleRefundClick(payment.paymentId)}
+                                    className="text-red-600 border-red-200 hover:bg-red-50"
+                                  >
+                                    환불신청
+                                  </Button>
+                                ) : payment.hasRefund && payment.refundStatus === 'PENDING' ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleRefundClick(payment.paymentId)}
+                                    className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                                  >
+                                    환불진행
+                                  </Button>
+                                ) : payment.hasRefund && payment.refundStatus === 'COMPLETED' ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled
+                                    className="text-gray-400"
+                                  >
+                                    환불완료
+                                  </Button>
+                                ) : null}
+                                {/* 개발 모드에서만 표시되는 테스트 버튼 */}
+                                {process.env.NODE_ENV === 'development' && payment.paymentStatus === 'SUCCESS' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleTestArrival(payment)}
+                                    className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                                  >
+                                    테스트
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -636,6 +908,129 @@ export default function PaymentHistoryPage() {
           </div>
         </div>
       </div>
+
+      {/* 테스트 모달 */}
+      <Dialog open={testModalOpen} onOpenChange={setTestModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TestTube className="h-5 w-5 text-purple-600" />
+              열차 도착 이벤트 테스트
+            </DialogTitle>
+            <DialogDescription>
+              마일리지 적립을 테스트하기 위한 열차 도착 이벤트를 시뮬레이션합니다.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {selectedPayment && (
+              <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">결제 ID:</span>
+                  <span className="font-medium">{selectedPayment.paymentId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">예약 ID:</span>
+                  <span className="font-medium">R{selectedPayment.reservationId.toString().padStart(13, '0')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">적립 예정 마일리지:</span>
+                  <span className="font-medium text-blue-600">+{formatAmount(selectedPayment.mileageToEarn)}P</span>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <Label htmlFor="trainScheduleId">열차 스케줄 ID</Label>
+              <Input
+                id="trainScheduleId"
+                type="text"
+                value={trainScheduleId}
+                onChange={(e) => setTrainScheduleId(e.target.value)}
+                placeholder="열차 스케줄 ID를 입력하세요"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                * 실제 TrainSchedule ID를 입력해주세요. (예약 ID와 다릅니다)
+              </p>
+            </div>
+
+            <div>
+              <Label>도착 시뮬레이션 모드</Label>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <button
+                  onClick={() => setTestMode('ontime')}
+                  className={`p-3 rounded-lg border-2 transition-colors ${
+                    testMode === 'ontime'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <Clock className="h-5 w-5 mx-auto mb-1" />
+                  <div className="font-medium">정시 도착</div>
+                  <div className="text-xs mt-1">기본 마일리지만 적립</div>
+                </button>
+                <button
+                  onClick={() => setTestMode('delay')}
+                  className={`p-3 rounded-lg border-2 transition-colors ${
+                    testMode === 'delay'
+                      ? 'border-red-500 bg-red-50 text-red-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <Clock className="h-5 w-5 mx-auto mb-1" />
+                  <div className="font-medium">지연 도착</div>
+                  <div className="text-xs mt-1">지연 보상 추가 적립</div>
+                </button>
+              </div>
+            </div>
+
+            {testMode === 'delay' && (
+              <div>
+                <Label htmlFor="delayMinutes">지연 시간 (분)</Label>
+                <Input
+                  id="delayMinutes"
+                  type="number"
+                  value={delayMinutes}
+                  onChange={(e) => setDelayMinutes(parseInt(e.target.value) || 0)}
+                  min="0"
+                  max="180"
+                  className="mt-1"
+                />
+                <div className="text-xs text-gray-500 mt-1 space-y-1">
+                  <p>• 20분 이상: 결제금액의 12.5% 보상</p>
+                  <p>• 40분 이상: 결제금액의 25% 보상</p>
+                  <p>• 60분 이상: 결제금액의 50% 보상</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setTestModalOpen(false)}
+              disabled={testLoading}
+            >
+              취소
+            </Button>
+            <Button
+              onClick={executeTest}
+              disabled={testLoading || !trainScheduleId}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {testLoading ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                  전송 중...
+                </>
+              ) : (
+                '테스트 실행'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

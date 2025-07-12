@@ -3,19 +3,9 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Search, Train, MapPin, Users, ArrowRight, Clock, ChevronLeft } from "lucide-react"
-import { format } from "date-fns"
-import { ko } from "date-fns/locale"
-import { cn } from "@/lib/utils"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
 import { User, Phone, Lock, Home, Printer } from "lucide-react"
 
 export default function GuestTicketSearchPage() {
@@ -29,6 +19,13 @@ export default function GuestTicketSearchPage() {
       return
     }
 
+    // 비회원 정보를 sessionStorage에 저장
+    sessionStorage.setItem('guestInfo', JSON.stringify({
+      name,
+      phoneNumber,
+      password
+    }))
+
     // 비회원 승차권 확인 페이지로 이동
     window.location.href = "/guest-ticket/tickets"
   }
@@ -36,7 +33,11 @@ export default function GuestTicketSearchPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <Header />
+      <div className="bg-blue-600 text-white py-6">
+        <div className="container mx-auto px-4">
+          <h1 className="text-2xl font-bold text-center">승차권 확인</h1>
+        </div>
+      </div>
 
       {/* Breadcrumb */}
       <div className="bg-white border-b py-3">
@@ -63,10 +64,7 @@ export default function GuestTicketSearchPage() {
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">비회원 승차권 확인</h2>
             <p className="text-gray-600">
-              비회원 인증 후 승차권(웹티켓)을 확인하실 수 있습니다.{" "}
-              <span className="text-red-600 font-medium">
-                (전화발권 승차권 : 비밀번호 5자리는 코레일 일일톡이나 문자메시지를 확인하세요.)
-              </span>
+              비회원 인증 후 승차권(웹티켓)을 확인하실 수 있습니다.
             </p>
           </div>
 
@@ -158,9 +156,6 @@ export default function GuestTicketSearchPage() {
           </Card>
         </div>
       </div>
-
-      {/* Footer */}
-      <Footer />
     </div>
   )
 }

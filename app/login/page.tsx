@@ -1,12 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import {useEffect, useState} from "react"
-import {Button} from "@/components/ui/button"
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
-import {Input} from "@/components/ui/input"
-import {Label} from "@/components/ui/label"
-import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,67 +18,53 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {Apple, Eye, EyeOff, Lock, Mail, Phone, User, UserX} from "lucide-react"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
-import {useRouter} from "next/navigation"
-import {login} from "@/lib/api/auth"
-import {tokenManager} from "@/lib/auth"
+import { Train, Eye, EyeOff, User, Lock, Apple, Mail, Phone, UserX } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { tokenManager } from "@/lib/auth"
 
 export default function LoginPage() {
-  const [memberNumber, setMemberNumber] = useState("")
-  const [email, setEmail] = useState("")
-  const [phoneNumber, setPhoneNumber] = useState("")
-  const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
-  const [showGuestDialog, setShowGuestDialog] = useState(false)
-  const [activeTab, setActiveTab] = useState("member")
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectUrl = searchParams.get('redirect') || '/'
+  
+  // 공통 상태
+  const [activeTab, setActiveTab] = useState("member")
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  // 페이지 로드 시 localStorage에서 회원번호 가져오기
+  // 회원 로그인 상태
+  const [memberNumber, setMemberNumber] = useState("")
+  const [password, setPassword] = useState("")
+
+  // 이메일 로그인 상태
+  const [email, setEmail] = useState("")
+
+  // 휴대폰 로그인 상태
+  const [phoneNumber, setPhoneNumber] = useState("")
+
+  // 비회원 조회 상태
+  const [guestReservationNumber, setGuestReservationNumber] = useState("")
+  const [guestPhone, setGuestPhone] = useState("")
+  const [guestLoading, setGuestLoading] = useState(false)
+  const [guestError, setGuestError] = useState("")
+
+  // 비밀번호 재설정 다이얼로그
+  const [showResetDialog, setShowResetDialog] = useState(false)
+  const [resetEmail, setResetEmail] = useState("")
+  const [resetLoading, setResetLoading] = useState(false)
+
+  // 비회원 예매 다이얼로그
+  const [showGuestDialog, setShowGuestDialog] = useState(false)
+
+  // 페이지 로드 시 기존 토큰 상태 확인
   useEffect(() => {
-    const storedMemberNo = localStorage.getItem('signupMemberNo')
-    if (storedMemberNo) {
-      setMemberNumber(storedMemberNo)
-      // 회원번호를 가져온 후 localStorage에서 삭제
-      localStorage.removeItem('signupMemberNo')
+    const existingToken = tokenManager.getToken();
+    if (existingToken) {
+      // 기존 토큰이 있으면 정리
+      tokenManager.clearAllTokens();
     }
-  }, [])
-
-  // 로그인 상태 체크
-  useEffect(() => {
-    const checkAuth = () => {
-      const authenticated = tokenManager.isAuthenticated()
-      setIsLoggedIn(authenticated)
-      
-      if (authenticated) {
-        // 이미 로그인된 경우 메인 페이지로 리다이렉트
-        router.push('/')
-      }
-    }
-
-    checkAuth()
-  }, [router])
-
-  // 로딩 중이거나 인증 확인 중일 때
-  if (isLoggedIn === null) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">페이지를 불러오는 중...</p>
-        </div>
-        <Footer />
-      </div>
-    )
-  }
-
-  // 이미 로그인된 경우 (리다이렉트 중)
-  if (isLoggedIn) {
-    return null
-  }
+  }, []);
 
   const handleMemberLogin = async () => {
     if (!memberNumber || !password) {
@@ -85,52 +72,95 @@ export default function LoginPage() {
       return
     }
 
+    setLoading(true)
+    setError("")
+
     try {
-      const response = await login({ memberNo: memberNumber, password })
+      // tokenManager를 사용한 토큰 정리
+      tokenManager.clearAllTokens();
       
-      if (response.result) {
-        // 토큰들을 localStorage에 저장
-        tokenManager.setLoginTokens(
-          response.result.accessToken,
-          response.result.refreshToken,
-          response.result.accessTokenExpiresIn
-        )
+      const response = await fetch('http://localhost:8080/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          memberNo: memberNumber,
+          password: password
+        })
+      })
+
+      console.log('📡 로그인 응답 상태:', response.status);
+
+      if (response.ok) {
+        const data = await response.json()
+        const { accessToken, refreshToken, accessTokenExpiresIn } = data.result
         
-        // 페이지 새로고침하여 Header 상태 업데이트
-        window.location.href = "/"
+        // tokenManager를 사용한 토큰 저장
+        tokenManager.setLoginTokens(accessToken, refreshToken, accessTokenExpiresIn);
+        
+        alert("로그인이 성공했습니다!")
+        router.push(redirectUrl)
+        
+      } else {
+        let errorMessage = "아이디 또는 비밀번호를 확인해주세요.";
+        
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.message || errorMessage;
+        } catch (jsonError) {
+        }
+        
+        setError(errorMessage)
+        alert("로그인에 실패했습니다: " + errorMessage)
       }
-    } catch (error: any) {
-      console.error("로그인 에러:", error)
-      alert(error.message || "로그인에 실패했습니다.")
+      
+    } catch (error) {
+      setError("네트워크 오류가 발생했습니다.")
+      alert("네트워크 오류가 발생했습니다.")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleEmailLogin = () => {
+  const handleEmailLogin = async () => {
     if (!email || !password) {
       alert("이메일과 비밀번호를 모두 입력해주세요.")
       return
     }
 
-    console.log("이메일 로그인 시도:", {
-      email,
-      password,
-    })
+    setLoading(true)
+    setError("")
 
-    alert(`이메일 ${email}로 로그인을 시도합니다.`)
+    try {
+      // 이메일 로그인은 현재 백엔드에서 지원하지 않으므로 알림 표시
+      alert("이메일 로그인은 현재 지원하지 않습니다. 회원번호 로그인을 이용해주세요.")
+    } catch (error: any) {
+      console.error("이메일 로그인 에러:", error)
+      setError("로그인에 실패했습니다.")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handlePhoneLogin = () => {
+  const handlePhoneLogin = async () => {
     if (!phoneNumber || !password) {
       alert("휴대폰 번호와 비밀번호를 모두 입력해주세요.")
       return
     }
 
-    console.log("휴대폰 로그인 시도:", {
-      phoneNumber,
-      password,
-    })
+    setLoading(true)
+    setError("")
 
-    alert(`휴대폰 번호 ${phoneNumber}로 로그인을 시도합니다.`)
+    try {
+      // 휴대폰 로그인은 현재 백엔드에서 지원하지 않으므로 알림 표시
+      alert("휴대폰 로그인은 현재 지원하지 않습니다. 회원번호 로그인을 이용해주세요.")
+    } catch (error: any) {
+      console.error("휴대폰 로그인 에러:", error)
+      setError("로그인에 실패했습니다.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleGuestBookingClick = () => {
@@ -138,26 +168,37 @@ export default function LoginPage() {
   }
 
   const handleGuestBookingConfirm = () => {
-    console.log("비회원 예매 이동")
     setShowGuestDialog(false)
-    // 비회원 예매 페이지로 이동하는 대신 승차권 예매 페이지로 이동하되 guest 파라미터 추가
-    window.location.href = "/ticket/booking?guest=true"
+    // 비회원 예매 페이지로 이동하되 guest 파라미터 추가
+    router.push("/ticket/booking?guest=true")
   }
 
   const handleKakaoLogin = () => {
-    console.log("카카오 로그인 시도")
-    alert("카카오 로그인을 시도합니다.")
+    alert("카카오 로그인은 현재 준비 중입니다.")
   }
 
   const handleAppleLogin = () => {
-    console.log("애플 로그인 시도")
-    alert("애플 로그인을 시도합니다.")
+    alert("애플 로그인은 현재 준비 중입니다.")
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
-      <Header />
+      <header className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="flex items-center space-x-2">
+              <Train className="h-8 w-8 text-blue-600" />
+              <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
+            </Link>
+            <nav className="hidden md:flex items-center space-x-6">
+              <Link href="/" className="text-gray-600 hover:text-blue-600">
+                홈으로
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
@@ -191,6 +232,10 @@ export default function LoginPage() {
 
                 {/* 회원번호 로그인 */}
                 <TabsContent value="member" className="space-y-4 mt-6">
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    handleMemberLogin();
+                  }}>
                   <div className="space-y-2">
                     <Label htmlFor="memberNumber" className="text-sm font-medium text-gray-700">
                       회원번호
@@ -204,6 +249,7 @@ export default function LoginPage() {
                         value={memberNumber}
                         onChange={(e) => setMemberNumber(e.target.value)}
                         className="pl-10"
+                        disabled={loading}
                       />
                     </div>
                   </div>
@@ -221,11 +267,13 @@ export default function LoginPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-10 pr-10"
+                        disabled={loading}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        disabled={loading}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -233,16 +281,22 @@ export default function LoginPage() {
                   </div>
 
                   <Button
-                    onClick={handleMemberLogin}
+                    type="submit"
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
-                    로그인
+                    {loading ? "로그인 중..." : "로그인"}
                   </Button>
+                  </form>
                 </TabsContent>
 
                 {/* 이메일 로그인 */}
                 <TabsContent value="email" className="space-y-4 mt-6">
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    handleEmailLogin();
+                  }}>
                   <div className="space-y-2">
                     <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                       이메일 주소
@@ -252,12 +306,14 @@ export default function LoginPage() {
                       <Input
                         id="email"
                         type="email"
-                        placeholder="이메일을 입력하세요"
+                        placeholder="test@raillo.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="pl-10"
+                        disabled={loading}
                       />
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 이메일: test@raillo.com</p>
                   </div>
 
                   <div className="space-y-2">
@@ -269,32 +325,41 @@ export default function LoginPage() {
                       <Input
                         id="emailPassword"
                         type={showPassword ? "text" : "password"}
-                        placeholder="비밀번호를 입력하세요"
+                        placeholder="test1234"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-10 pr-10"
+                        disabled={loading}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        disabled={loading}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 비밀번호: test1234</p>
                   </div>
 
                   <Button
-                    onClick={handleEmailLogin}
+                    type="submit"
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
-                    로그인
+                    {loading ? "로그인 중..." : "로그인"}
                   </Button>
+                  </form>
                 </TabsContent>
 
                 {/* 휴대폰 로그인 */}
                 <TabsContent value="phone" className="space-y-4 mt-6">
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    handlePhoneLogin();
+                  }}>
                   <div className="space-y-2">
                     <Label htmlFor="phoneNumber" className="text-sm font-medium text-gray-700">
                       휴대폰 번호
@@ -304,12 +369,14 @@ export default function LoginPage() {
                       <Input
                         id="phoneNumber"
                         type="tel"
-                        placeholder="휴대폰 번호를 입력하세요"
+                        placeholder="010-1234-5678"
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
                         className="pl-10"
+                        disabled={loading}
                       />
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 휴대폰: 010-1234-5678</p>
                   </div>
 
                   <div className="space-y-2">
@@ -321,28 +388,33 @@ export default function LoginPage() {
                       <Input
                         id="phonePassword"
                         type={showPassword ? "text" : "password"}
-                        placeholder="비밀번호를 입력하세요"
+                        placeholder="test1234"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-10 pr-10"
+                        disabled={loading}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        disabled={loading}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+                    <p className="text-xs text-gray-500">테스트용 비밀번호: test1234</p>
                   </div>
 
                   <Button
-                    onClick={handlePhoneLogin}
+                    type="submit"
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
-                    로그인
+                    {loading ? "로그인 중..." : "로그인"}
                   </Button>
+                  </form>
                 </TabsContent>
 
                 {/* 비회원 예매 */}
@@ -360,6 +432,7 @@ export default function LoginPage() {
                       variant="outline"
                       className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 font-semibold py-3"
                       size="lg"
+                      disabled={loading}
                     >
                       비회원 예매하기
                     </Button>
@@ -399,7 +472,7 @@ export default function LoginPage() {
                       비밀번호 찾기
                     </Link>
                     <span className="text-gray-300">|</span>
-                    <Link href="/signup" className="text-gray-600 hover:text-blue-600">
+                    <Link href="/signup/verify" className="text-gray-600 hover:text-blue-600">
                       회원가입
                     </Link>
                   </div>
@@ -408,7 +481,7 @@ export default function LoginPage() {
 
               {activeTab === "guest" && (
                 <div className="mt-6 text-center text-sm">
-                  <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">
+                  <Link href="/signup/verify" className="text-blue-600 hover:text-blue-700 font-semibold">
                     회원가입하고 더 많은 혜택 받기
                   </Link>
                 </div>
@@ -435,6 +508,7 @@ export default function LoginPage() {
                     variant="outline"
                     className="w-full bg-yellow-300 hover:bg-yellow-400 text-gray-900 border-yellow-300 font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
                     <div className="flex items-center justify-center space-x-2">
                       <div className="w-5 h-5 bg-gray-900 rounded-sm flex items-center justify-center">
@@ -450,6 +524,7 @@ export default function LoginPage() {
                     variant="outline"
                     className="w-full bg-black hover:bg-gray-800 text-white border-black font-semibold py-3"
                     size="lg"
+                    disabled={loading}
                   >
                     <div className="flex items-center justify-center space-x-2">
                       <Apple className="h-5 w-5" />
@@ -470,7 +545,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
               아직 RAIL-O 회원이 아니신가요?{" "}
-              <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">
+              <Link href="/signup/verify" className="text-blue-600 hover:text-blue-700 font-semibold">
                 회원가입하기
               </Link>
             </p>
@@ -497,7 +572,46 @@ export default function LoginPage() {
       </AlertDialog>
 
       {/* Footer */}
-      <Footer />
+      <footer className="bg-gray-800 text-white py-8 mt-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="font-semibold mb-4">고객센터</h3>
+              <p className="text-sm text-gray-300">1544-7788</p>
+              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">빠른 링크</h3>
+              <ul className="space-y-2 text-sm text-gray-300">
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    이용약관
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    개인정보처리방침
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    사이트맵
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
+              <p className="text-sm text-gray-300">
+                한국철도공사는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

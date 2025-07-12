@@ -1,23 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Search, Train, MapPin, Clock, User, ArrowRight, ChevronLeft, X, AlertTriangle, Info, CreditCard } from "lucide-react"
-import { format } from "date-fns"
-import { ko } from "date-fns/locale"
-import { cn } from "@/lib/utils"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +17,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { format } from "date-fns"
+import { ko } from "date-fns/locale"
+import { Train, ChevronLeft, Clock, MapPin, ArrowRight, CreditCard, X, AlertTriangle, Info } from "lucide-react"
+import { reservationApi } from "@/lib/api/client"
+import { validateToken } from "@/lib/auth"
 
 interface ReservationItem {
   id: string
@@ -51,44 +45,53 @@ export default function ReservationsPage() {
   const router = useRouter()
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [selectedReservation, setSelectedReservation] = useState<string | null>(null)
+  const [reservations, setReservations] = useState<ReservationItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 예약 목록 (결제 안된 예약들)
-  const [reservations] = useState<ReservationItem[]>([
-    {
-      id: "1",
-      trainType: "ITX-새마을",
-      trainNumber: "1036",
-      date: "2025년 06월 02일(월)",
-      departureStation: "대구",
-      arrivalStation: "서울",
-      departureTime: "09:33",
-      arrivalTime: "13:14",
-      seatClass: "일반실",
-      carNumber: 3,
-      seatNumber: "8A",
-      price: 42400,
-      reservationNumber: "R2025060100001",
-      paymentDeadline: new Date(Date.now() + 25 * 60 * 1000), // 25분 후
-      status: "pending",
-    },
-    {
-      id: "2",
-      trainType: "KTX",
-      trainNumber: "101",
-      date: "2025년 06월 05일(목)",
-      departureStation: "서울",
-      arrivalStation: "부산",
-      departureTime: "06:00",
-      arrivalTime: "08:42",
-      seatClass: "일반실",
-      carNumber: 2,
-      seatNumber: "15B",
-      price: 59800,
-      reservationNumber: "R2025060100002",
-      paymentDeadline: new Date(Date.now() - 5 * 60 * 1000), // 5분 전 (만료)
-      status: "expired",
-    },
-  ])
+  // 페이지 로드 시 예약 목록 조회
+  useEffect(() => {
+    if (!validateToken()) {
+      return // validateToken 내에서 리다이렉트 처리
+    }
+    fetchReservations()
+  }, [])
+
+  // 예약 목록 조회
+  const fetchReservations = async () => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const data = await reservationApi.getReservations()
+      
+      // API 응답을 프론트엔드 형식으로 변환
+      const transformedReservations = data.result?.map((item: any) => ({
+        id: item.reservationId?.toString() || item.paymentId?.toString(),
+        trainType: item.trainType || "KTX",
+        trainNumber: item.trainNumber || "-",
+        date: item.departureDate ? format(new Date(item.departureDate), "yyyy년 MM월 dd일(EEE)", { locale: ko }) : "-",
+        departureStation: item.departureStation || "-",
+        arrivalStation: item.arrivalStation || "-",
+        departureTime: item.departureTime || "-",
+        arrivalTime: item.arrivalTime || "-",
+        seatClass: item.seatClass || "일반실",
+        carNumber: item.carNumber || 1,
+        seatNumber: item.seatNumber || "-",
+        price: item.totalAmount || 0,
+        reservationNumber: item.reservationNumber || item.externalOrderId || "-",
+        paymentDeadline: item.paymentDeadline ? new Date(item.paymentDeadline) : new Date(Date.now() + 10 * 60 * 1000),
+        status: new Date(item.paymentDeadline) > new Date() ? "pending" : "expired"
+      })) || []
+      
+      setReservations(transformedReservations)
+    } catch (err) {
+      console.error('예약 목록 조회 실패:', err)
+      setError('예약 목록을 불러오는 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getTrainTypeColor = (trainType: string) => {
     switch (trainType) {
@@ -127,11 +130,17 @@ export default function ReservationsPage() {
     setShowCancelDialog(true)
   }
 
-  const confirmCancelReservation = () => {
+  const confirmCancelReservation = async () => {
     if (selectedReservation) {
-      // 실제로는 API 호출하여 예약 취소
-      console.log("예약 취소:", selectedReservation)
-      alert("예약이 취소되었습니다.")
+      try {
+        await reservationApi.cancelReservation(parseInt(selectedReservation))
+        alert("예약이 취소되었습니다.")
+        // 예약 목록 새로고침
+        fetchReservations()
+      } catch (error) {
+        console.error("예약 취소 실패:", error)
+        alert("예약 취소 중 오류가 발생했습니다.")
+      }
     }
     setShowCancelDialog(false)
     setSelectedReservation(null)
@@ -144,7 +153,31 @@ export default function ReservationsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
-      <Header />
+      <header className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link href="/" className="flex items-center space-x-2">
+                <Train className="h-8 w-8 text-blue-600" />
+                <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
+              </Link>
+              <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
+                <Link href="/" className="hover:text-blue-600">
+                  홈
+                </Link>
+                <span>{">"}</span>
+                <span className="text-blue-600">예약승차권 조회</span>
+              </div>
+            </div>
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                <ChevronLeft className="h-4 w-4" />
+                <span>홈으로</span>
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
@@ -169,7 +202,36 @@ export default function ReservationsPage() {
           <div className="space-y-4">
             <h3 className="text-xl font-bold text-gray-900">예약 내역</h3>
 
-            {reservations.length === 0 ? (
+            {loading ? (
+              // 로딩 스켈레톤
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i}>
+                    <CardContent className="p-6">
+                      <Skeleton className="h-32 w-full" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : error ? (
+              // 에러 메시지
+              <Card className="bg-red-50 border-red-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center space-x-2 text-red-600">
+                    <AlertTriangle className="h-5 w-5" />
+                    <span>{error}</span>
+                  </div>
+                  <Button 
+                    onClick={fetchReservations} 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-4"
+                  >
+                    다시 시도
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : reservations.length === 0 ? (
               <Card>
                 <CardContent className="p-12 text-center">
                   <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -326,7 +388,46 @@ export default function ReservationsPage() {
       </AlertDialog>
 
       {/* Footer */}
-      <Footer />
+      <footer className="bg-gray-800 text-white py-8 mt-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="font-semibold mb-4">고객센터</h3>
+              <p className="text-sm text-gray-300">1544-7788</p>
+              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">빠른 링크</h3>
+              <ul className="space-y-2 text-sm text-gray-300">
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    이용약관
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    개인정보처리방침
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    사이트맵
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
+              <p className="text-sm text-gray-300">
+                RAIL-O는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

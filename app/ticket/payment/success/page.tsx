@@ -19,7 +19,7 @@ export default function PaymentSuccessPage() {
   useEffect(() => {
     const approvePayment = async () => {
       try {
-        console.log("🔄 카카오페이 결제 승인 요청", { pgToken, reservationId })
+        // 카카오페이 결제 승인 요청
 
         const response = await apiClient.post("/api/v1/payments/pg/approve", {
           paymentMethod: "KAKAO_PAY",
@@ -27,7 +27,7 @@ export default function PaymentSuccessPage() {
           merchantOrderId: reservationId
         })
 
-        console.log("✅ 카카오페이 결제 승인 완료:", response.data)
+        // 카카오페이 결제 승인 완료
         setPaymentResult(response.data)
         
         // 3초 후 결제 완료 페이지로 이동
@@ -36,11 +36,11 @@ export default function PaymentSuccessPage() {
         }, 3000)
 
       } catch (error: any) {
-        console.error("❌ 카카오페이 결제 승인 실패:", error)
+        // 카카오페이 결제 승인 실패
         
         if (error.response?.status === 404) {
           // 백엔드가 없을 때 개발 모드
-          console.warn("⚠️ 백엔드 연결 실패 - 개발 모드로 진행")
+          // 백엔드 연결 실패 - 개발 모드로 진행
           setTimeout(() => {
             router.push(`/ticket/payment-complete?reservationId=${reservationId}`)
           }, 2000)

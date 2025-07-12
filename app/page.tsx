@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +17,7 @@ import {
   User,
   ShoppingCart,
   LogIn,
+  LogOut,
   Clock,
   MapPin,
   ArrowLeftRight,
@@ -25,16 +26,23 @@ import {
   RotateCcw,
   ChevronLeft,
   ChevronRight,
-  ArrowRight,
-  Star,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
+import apiClient, { mileageApi } from "@/lib/api/client"
+
+interface UserInfo {
+  memberNo: string
+  name: string
+  email: string
+  totalMileage: number
+}
 
 export default function HomePage() {
-  // 임시 로그인 상태 시뮬레이션 (실제로는 인증 상태에 따라 결정)
-  const isLoggedIn = false // Simplified login status
+  // 로그인 상태 및 사용자 정보
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+  const [loading, setLoading] = useState(true)
+  
   // 예매 폼 상태
   const [departureStation, setDepartureStation] = useState("")
   const [arrivalStation, setArrivalStation] = useState("")
@@ -43,7 +51,100 @@ export default function HomePage() {
   const [showSidebar, setShowSidebar] = useState(false)
   const [showDateDialog, setShowDateDialog] = useState(false)
   const [selectedTime, setSelectedTime] = useState("00시")
-  const [tempDate, setTempDate] = useState<Date | undefined>(departureDate)
+  const [tempDate, setTempDate] = useState<Date | undefined>(undefined)
+
+  // 컴포넌트 마운트 시 로그인 상태 확인
+  useEffect(() => {
+    checkLoginStatus()
+  }, [])
+
+  const checkLoginStatus = async () => {
+    try {
+      const accessToken = localStorage.getItem("accessToken")
+      
+      if (!accessToken) {
+        setIsLoggedIn(false)
+        setUserInfo(null)
+        setLoading(false) // 로딩 상태 해제
+        return
+      }
+
+
+      // JWT 토큰에서 사용자 정보 추출
+      try {
+        const tokenParts = accessToken.split('.')
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]))
+          
+          
+          // 토큰이 만료되지 않았는지 확인
+          const currentTime = Math.floor(Date.now() / 1000)
+          if (payload.exp && payload.exp > currentTime) {
+            // 🧪 토큰만으로 로그인 상태 설정 (마일리지는 선택적 조회)
+            
+            // 먼저 토큰 정보로 로그인 상태 설정
+            const loginData = {
+              memberNo: payload.sub || "Unknown",
+              name: payload.name || payload.sub || "사용자",
+              email: payload.email || "unknown@raillo.com",
+              totalMileage: 0
+            }
+            
+            setUserInfo(loginData)
+            setIsLoggedIn(true)
+            
+            // 마일리지 조회는 선택적으로 수행 (실패해도 로그인 상태 유지)
+            try {
+              const mileageResponse = await mileageApi.getMileageBalance()
+              
+              if (mileageResponse && mileageResponse.result && mileageResponse.result.currentBalance !== undefined) {
+                setUserInfo(prev => ({
+                  ...prev!,
+                  totalMileage: mileageResponse.result.currentBalance || 0
+                }))
+              }
+            } catch (mileageError) {
+              // 마일리지 조회 실패는 무시하고 계속 진행
+            }
+          } else {
+            throw new Error("토큰 만료됨")
+          }
+        } else {
+          throw new Error("잘못된 토큰 형식")
+        }
+      } catch (error) {
+        
+        // 무효한 토큰 정리하고 비로그인 상태로 전환
+        localStorage.removeItem("accessToken")
+        localStorage.removeItem("refreshToken")
+        
+        // 추가 토큰 정리
+        Object.keys(localStorage).forEach(key => {
+          if (key.toLowerCase().includes('token')) {
+            localStorage.removeItem(key)
+          }
+        })
+        
+        setIsLoggedIn(false)
+        setUserInfo(null)
+      } finally {
+        // 모든 경우에 로딩 상태 해제
+        setLoading(false)
+      }
+    } catch (error) {
+      console.error("로그인 상태 확인 에러:", error)
+      setIsLoggedIn(false)
+      setUserInfo(null)
+    } finally {
+      // 모든 경우에 로딩 상태 해제
+      setLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    const { globalLogout } = await import('@/lib/auth')
+    globalLogout('로그아웃되었습니다.')
+  }
 
   // 주요 기차역 목록
   const stations = [
@@ -82,10 +183,16 @@ export default function HomePage() {
     }
 
     // URL 파라미터 생성
+    // toISOString() 대신 로컬 날짜 포맷 사용 (시간대 문제 해결)
+    const year = departureDate.getFullYear()
+    const month = String(departureDate.getMonth() + 1).padStart(2, '0')
+    const day = String(departureDate.getDate()).padStart(2, '0')
+    const localDateString = `${year}-${month}-${day}`
+    
     const searchParams = new URLSearchParams({
       departure: departureStation,
       arrival: arrivalStation,
-      date: departureDate.toISOString().split("T")[0],
+      date: localDateString,
       passengers: passengers,
     })
 
@@ -99,9 +206,111 @@ export default function HomePage() {
     setArrivalStation(temp)
   }
 
+  // 날짜 다이얼로그 열기 함수
+  const openDateDialog = () => {
+    // tempDate를 현재 선택된 날짜나 오늘 날짜로 초기화
+    setTempDate(departureDate || new Date())
+    setShowDateDialog(true)
+  }
+
+  // 로딩 중일 때 (간소한 로딩)
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <Train className="h-8 w-8 text-blue-600 mx-auto mb-2 animate-pulse" />
+          <p className="text-sm text-gray-500">로딩 중...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <Header />
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Train className="h-8 w-8 text-blue-600" />
+              <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
+            </div>
+            <nav className="hidden md:flex items-center space-x-6">
+              {isLoggedIn ? (
+                <>
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <User className="h-4 w-4" />
+                    <span>{userInfo?.name}님</span>
+                    <span className="text-blue-600">({userInfo?.totalMileage?.toLocaleString()}P)</span>
+                  </div>
+                  <Link href="/cart">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <ShoppingCart className="h-4 w-4" />
+                      <span>장바구니</span>
+                    </Button>
+                  </Link>
+                  <Link href="/mypage">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <User className="h-4 w-4" />
+                      <span>마이페이지</span>
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>로그아웃</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    onClick={() => setShowSidebar(true)}
+                  >
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link href="/login">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <LogIn className="h-4 w-4" />
+                      <span>로그인</span>
+                    </Button>
+                  </Link>
+                  <Link href="/cart">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <ShoppingCart className="h-4 w-4" />
+                      <span>장바구니</span>
+                    </Button>
+                  </Link>
+                  <Link href="/mypage">
+                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                      <User className="h-4 w-4" />
+                      <span>마이페이지</span>
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    onClick={() => setShowSidebar(true)}
+                  >
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </nav>
+            {/* Mobile menu button */}
+            <Button variant="ghost" size="sm" className="md:hidden">
+              <User className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
+      </header>
 
       {/* Sidebar Overlay */}
       {showSidebar && (
@@ -254,7 +463,7 @@ export default function HomePage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start text-left font-normal bg-white text-gray-900 hover:bg-gray-50"
-                  onClick={() => setShowDateDialog(true)}
+                  onClick={openDateDialog}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {departureDate ? format(departureDate, "MM/dd", { locale: ko }) : "날짜 선택"}
@@ -590,7 +799,8 @@ export default function HomePage() {
                           key={i}
                           onClick={() => {
                             if (!isPast && isCurrentMonth) {
-                              setTempDate(currentDate)
+                              console.log("달력 날짜 클릭됨:", currentDate)
+                              setTempDate(new Date(currentDate))
                             }
                           }}
                           disabled={isPast || !isCurrentMonth}
@@ -663,9 +873,14 @@ export default function HomePage() {
             </Button>
             <Button
               onClick={() => {
+                console.log("적용 버튼 클릭됨", { tempDate, selectedTime })
                 if (tempDate) {
+                  console.log("날짜 설정됨:", tempDate)
                   setDepartureDate(tempDate)
                   setShowDateDialog(false)
+                } else {
+                  console.log("tempDate가 설정되지 않음")
+                  alert("날짜를 선택해주세요.")
                 }
               }}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
@@ -676,7 +891,47 @@ export default function HomePage() {
         </DialogContent>
       </Dialog>
 
-      <Footer />
+      {/* Footer */}
+      <footer className="bg-gray-800 text-white py-8 mt-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="font-semibold mb-4">고객센터</h3>
+              <p className="text-sm text-gray-300">1544-7788</p>
+              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">빠른 링크</h3>
+              <ul className="space-y-2 text-sm text-gray-300">
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    이용약관
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    개인정보처리방침
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    사이트맵
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
+              <p className="text-sm text-gray-300">
+                RAIL-O는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

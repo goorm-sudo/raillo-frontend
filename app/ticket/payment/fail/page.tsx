@@ -33,7 +33,7 @@ export default function PaymentFailPage() {
   const displayError = error || errorMsg || "알 수 없는 오류가 발생했습니다."
 
   useEffect(() => {
-    console.error(`❌ ${paymentMethodName} 결제 실패:`, { paymentMethod, errorCode, errorMsg, error })
+    // 결제 실패 로그
   }, [paymentMethodName, paymentMethod, errorCode, errorMsg, error])
 
   return (

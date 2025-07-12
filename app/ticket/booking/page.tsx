@@ -29,8 +29,6 @@ import {
   Users,
   ChevronRight,
 } from "lucide-react"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
 
 interface PassengerCounts {
   adult: number
@@ -103,18 +101,18 @@ export default function TicketBookingPage() {
   ]
 
   const timeOptions = [
-    "00시 이후",
-    "02시 이후",
-    "04시 이후",
-    "06시 이후",
-    "08시 이후",
-    "10시 이후",
-    "12시 이후",
-    "14시 이후",
-    "16시 이후",
-    "18시 이후",
-    "20시 이후",
-    "22시 이후",
+    { value: "00", label: "00시 이후" },
+    { value: "02", label: "02시 이후" },
+    { value: "04", label: "04시 이후" },
+    { value: "06", label: "06시 이후" },
+    { value: "08", label: "08시 이후" },
+    { value: "10", label: "10시 이후" },
+    { value: "12", label: "12시 이후" },
+    { value: "14", label: "14시 이후" },
+    { value: "16", label: "16시 이후" },
+    { value: "18", label: "18시 이후" },
+    { value: "20", label: "20시 이후" },
+    { value: "22", label: "22시 이후" },
   ]
 
   const passengerTypes = [
@@ -209,7 +207,32 @@ export default function TicketBookingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <Header />
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link href="/" className="flex items-center space-x-2">
+                <Train className="h-8 w-8 text-blue-600" />
+                <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
+              </Link>
+              <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
+                <Link href="/" className="hover:text-blue-600">
+                  홈
+                </Link>
+                <span>{">"}</span>
+                <span className="text-blue-600">승차권예매</span>
+              </div>
+            </div>
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                <ChevronLeft className="h-4 w-4" />
+                <span>돌아가기</span>
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
@@ -324,9 +347,9 @@ export default function TicketBookingPage() {
                       <SelectValue placeholder="출발 시간대를 선택하세요" />
                     </SelectTrigger>
                     <SelectContent>
-                      {timeOptions.map((time) => (
-                        <SelectItem key={time} value={time}>
-                          {time}
+                      {timeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1013,7 +1036,47 @@ export default function TicketBookingPage() {
         </DialogContent>
       </Dialog>
 
-      <Footer />
+      {/* Footer */}
+      <footer className="bg-gray-800 text-white py-8 mt-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="font-semibold mb-4">고객센터</h3>
+              <p className="text-sm text-gray-300">1544-7788</p>
+              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">빠른 링크</h3>
+              <ul className="space-y-2 text-sm text-gray-300">
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    이용약관
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    개인정보처리방침
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    사이트맵
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
+              <p className="text-sm text-gray-300">
+                RAIL-O는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

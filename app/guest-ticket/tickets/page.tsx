@@ -1,73 +1,95 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Train, MapPin, Clock, Calendar, User, ArrowRight, ChevronLeft, Download, Printer, Home, QrCode } from "lucide-react"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Train, Home, Printer, Download, QrCode, Clock, MapPin, User, AlertTriangle } from "lucide-react"
+import { paymentHistoryApi } from "@/lib/api/client"
 
 export default function GuestTicketsPage() {
-  // 예시 승차권 데이터
-  const tickets = [
-    {
-      id: "T001",
-      trainType: "KTX",
-      trainNumber: "101",
-      departure: {
-        station: "서울",
-        time: "08:00",
-        date: "2024.06.16",
-      },
-      arrival: {
-        station: "부산",
-        time: "10:52",
-        date: "2024.06.16",
-      },
-      seat: {
-        car: "3",
-        seat: "15A",
-        class: "일반실",
-      },
-      passenger: {
-        name: "김구름",
-        phone: "010-1234-5678",
-      },
-      price: 59800,
-      status: "사용가능",
-      purchaseDate: "2024.06.15 14:30",
-    },
-    {
-      id: "T002",
-      trainType: "ITX-새마을",
-      trainNumber: "1051",
-      departure: {
-        station: "서울",
-        time: "14:20",
-        date: "2024.06.18",
-      },
-      arrival: {
-        station: "대전",
-        time: "16:05",
-        date: "2024.06.18",
-      },
-      seat: {
-        car: "2",
-        seat: "8B",
-        class: "일반실",
-      },
-      passenger: {
-        name: "김구름",
-        phone: "010-1234-5678",
-      },
-      price: 23700,
-      status: "사용가능",
-      purchaseDate: "2024.06.16 09:15",
-    },
-  ]
+  const router = useRouter()
+  const [tickets, setTickets] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [guestInfo, setGuestInfo] = useState<any>(null)
+
+  // 페이지 로드 시 비회원 정보 확인 및 티켓 조회
+  useEffect(() => {
+    const savedGuestInfo = sessionStorage.getItem('guestInfo')
+    if (!savedGuestInfo) {
+      alert("비회원 정보가 없습니다. 다시 검색해주세요.")
+      router.push('/guest-ticket/search')
+      return
+    }
+    
+    const info = JSON.parse(savedGuestInfo)
+    setGuestInfo(info)
+    fetchGuestTickets(info)
+  }, [router])
+
+  // 비회원 티켓 조회
+  const fetchGuestTickets = async (info: any) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // TODO: 이 부분은 추후 Ticket 도메인이 구현되면 ticketApi.getGuestTickets()로 변경되어야 합니다
+      // 현재는 임시로 Payment API를 사용하여 결제 정보만 조회합니다
+      // 예약 번호가 있는 경우 해당 예약만 조회, 없으면 전체 조회
+      const reservationId = info.reservationId ? parseInt(info.reservationId) : 0
+      const data = await paymentHistoryApi.getGuestPaymentHistory(
+        reservationId,
+        info.name,
+        info.phoneNumber,
+        info.password
+      )
+      
+      // API 응답을 프론트엔드 형식으로 변환
+      // TODO: Ticket 도메인이 구현되면 이 변환 로직이 필요 없어집니다
+      const transformedTickets = data.payments?.map((item: any, index: number) => ({
+        id: item.paymentId || item.reservationNumber || `T${index + 1}`,
+        // TODO: 아래 정보들은 Ticket API에서 제공되어야 합니다
+        trainType: "KTX", // 임시 고정값
+        trainNumber: "-", // 임시 값
+        departure: {
+          station: "조회 불가", // 임시 값
+          time: "-",
+          date: "-",
+        },
+        arrival: {
+          station: "조회 불가", // 임시 값
+          time: "-",
+          date: "-",
+        },
+        seat: {
+          car: "-", // 임시 값
+          seat: "-", // 임시 값
+          class: "일반실", // 임시 고정값
+        },
+        passenger: {
+          name: info.name,
+          phone: info.phoneNumber,
+        },
+        price: item.amountPaid || item.totalAmount || 0,
+        status: item.paymentStatus === 'COMPLETED' ? "사용가능" : 
+                item.paymentStatus === 'USED' ? "사용완료" : "기간만료",
+        purchaseDate: item.paidAt ? new Date(item.paidAt).toLocaleString('ko-KR') : "-",
+        reservationNumber: item.reservationId || item.externalOrderId || "-",
+      })) || []
+      
+      setTickets(transformedTickets)
+    } catch (error) {
+      console.error('비회원 티켓 조회 실패:', error)
+      setError('티켓 정보를 불러오는 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -85,7 +107,11 @@ export default function GuestTicketsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <Header />
+      <div className="bg-blue-600 text-white py-6">
+        <div className="container mx-auto px-4">
+          <h1 className="text-2xl font-bold text-center">비회원 승차권 확인</h1>
+        </div>
+      </div>
 
       {/* Breadcrumb */}
       <div className="bg-white border-b py-3">
@@ -108,15 +134,90 @@ export default function GuestTicketsPage() {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
+          {/* Passenger Info */}
+          {guestInfo && (
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <User className="h-5 w-5 text-gray-500 mr-3" />
+                  <div>
+                    <p className="font-semibold">{guestInfo.name}</p>
+                    <p className="text-sm text-gray-600">{guestInfo.phoneNumber}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Title */}
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">예매 승차권 목록</h2>
-            <p className="text-gray-600">총 {tickets.length}건의 승차권이 조회되었습니다.</p>
+            {!loading && !error && (
+              <>
+                <p className="text-gray-600">총 {tickets.length}건의 승차권이 조회되었습니다.</p>
+                {/* TODO: Ticket 도메인 구현 완료 시 이 알림을 제거하세요 */}
+                {tickets.length > 0 && (
+                  <Alert className="mt-4 border-yellow-200 bg-yellow-50">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                    <AlertDescription className="text-yellow-800">
+                      현재 일부 승차권 정보(열차번호, 좌석정보 등)가 제한적으로 표시됩니다. 
+                      전체 정보는 추후 업데이트될 예정입니다.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </>
+            )}
           </div>
 
+          {/* Loading State */}
+          {loading && (
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <Card key={i}>
+                  <CardContent className="p-6">
+                    <Skeleton className="h-48 w-full" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && !loading && (
+            <Alert className="mb-6 border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                {error}
+                <Button 
+                  onClick={() => guestInfo && fetchGuestTickets(guestInfo)} 
+                  variant="outline" 
+                  size="sm" 
+                  className="ml-4"
+                >
+                  다시 시도
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Empty State */}
+          {!loading && !error && tickets.length === 0 && (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Train className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">예매 내역이 없습니다</h3>
+                <p className="text-gray-600 mb-6">해당 정보로 조회된 승차권이 없습니다.</p>
+                <Link href="/guest-ticket/search">
+                  <Button variant="outline">다시 검색하기</Button>
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Tickets List */}
-          <div className="space-y-6">
-            {tickets.map((ticket) => (
+          {!loading && !error && tickets.length > 0 && (
+            <div className="space-y-6">
+              {tickets.map((ticket) => (
               <Card key={ticket.id} className="overflow-hidden">
                 <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 pb-4">
                   <div className="flex items-center justify-between">
@@ -126,7 +227,7 @@ export default function GuestTicketsPage() {
                         <CardTitle className="text-xl font-bold text-blue-900">
                           {ticket.trainType} {ticket.trainNumber}호
                         </CardTitle>
-                        <p className="text-sm text-blue-700">예매번호: {ticket.id}</p>
+                        <p className="text-sm text-blue-700">예매번호: {ticket.reservationNumber}</p>
                       </div>
                     </div>
                     <Badge className={getStatusColor(ticket.status)}>{ticket.status}</Badge>
@@ -230,7 +331,8 @@ export default function GuestTicketsPage() {
                 </CardContent>
               </Card>
             ))}
-          </div>
+            </div>
+          )}
 
           {/* Back Button */}
           <div className="mt-8 text-center">
@@ -242,9 +344,6 @@ export default function GuestTicketsPage() {
           </div>
         </div>
       </div>
-
-      {/* Footer */}
-      <Footer />
     </div>
   )
 }
