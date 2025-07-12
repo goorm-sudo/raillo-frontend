@@ -5,7 +5,7 @@ import {useRouter} from "next/navigation"
 import {format} from "date-fns"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
-import {makeReservation, searchTrains, stationUtils} from "@/lib/api/train"
+import {makeReservation, searchTrains, stationUtils, searchCars, searchSeats} from "@/lib/api/train"
 import {SeatSelectionDialog} from "@/components/ui/seat-selection-dialog"
 import {BookingPanel} from "@/components/ui/booking-panel"
 import {SearchForm} from "@/components/ui/search-form"
@@ -108,6 +108,12 @@ export default function TrainSearchPage() {
   const [showSeatSelection, setShowSeatSelection] = useState(false)
   const [selectedSeats, setSelectedSeats] = useState<string[]>([])
   const [selectedCar, setSelectedCar] = useState(1)
+  
+  // 객차 및 좌석 조회 상태
+  const [carList, setCarList] = useState<any[]>([])
+  const [seatList, setSeatList] = useState<any[]>([])
+  const [loadingCars, setLoadingCars] = useState(false)
+  const [loadingSeats, setLoadingSeats] = useState(false)
 
   // URL parameters (fallback)
   const [departureStation, setDepartureStation] = useState("")
@@ -152,7 +158,7 @@ export default function TrainSearchPage() {
         const resultArray = Array.isArray(content) ? content : [content]
         
         const apiTrains: TrainInfo[] = resultArray.map((train: any, index: number) => ({
-          trainScheduleId: train.trainScheduleId,
+          trainScheduleId: train.trainScheduleId || 0,
           id: `${train.trainNumber || train.id || index}_${train.departureTime || index}_${index}`,
           trainType: train.trainName || train.trainType || "KTX",
           trainNumber: train.trainNumber || `${index + 1}`,
@@ -404,6 +410,12 @@ export default function TrainSearchPage() {
 
     setSelectedTrain(train)
     setSelectedSeatType(seatType)
+    
+    // 객차 조회 호출
+    if (train.trainScheduleId) {
+      fetchCars(train.trainScheduleId)
+    }
+    
     setShowBookingPanel(true) // 예매 패널 먼저 열기
   }
 
@@ -438,7 +450,7 @@ export default function TrainSearchPage() {
         const resultArray = Array.isArray(content) ? content : [content]
         
         const newTrains: TrainInfo[] = resultArray.map((train: any, index: number) => ({
-          trainScheduleId: train.trainScheduleId,
+          trainScheduleId: train.trainScheduleId || 0,
           id: `${train.trainNumber || train.id || index}_${train.departureTime || index}_${index}_${nextPage}`,
           trainType: train.trainName || train.trainType || "KTX",
           trainNumber: train.trainNumber || `${index + 1}`,
@@ -478,12 +490,42 @@ export default function TrainSearchPage() {
     }
   }
 
-  // 예약용 passengerSummary 생성 함수
-  const getPassengerSummaryForReservation = () => ({
-    adult: passengerCounts.adult,
-    child: passengerCounts.child,
-    senior: passengerCounts.senior,
-  })
+  // 예약용 passengers 생성 함수
+  const getPassengersForReservation = () => {
+    const passengers = []
+    
+    if (passengerCounts.adult > 0) {
+      passengers.push({ passengerType: 'ADULT' as const, count: passengerCounts.adult })
+    }
+    if (passengerCounts.child > 0) {
+      passengers.push({ passengerType: 'CHILD' as const, count: passengerCounts.child })
+    }
+    if (passengerCounts.infant > 0) {
+      passengers.push({ passengerType: 'INFANT' as const, count: passengerCounts.infant })
+    }
+    if (passengerCounts.senior > 0) {
+      passengers.push({ passengerType: 'SENIOR' as const, count: passengerCounts.senior })
+    }
+    if (passengerCounts.severelydisabled > 0) {
+      passengers.push({ passengerType: 'DISABLED_HEAVY' as const, count: passengerCounts.severelydisabled })
+    }
+    if (passengerCounts.mildlydisabled > 0) {
+      passengers.push({ passengerType: 'DISABLED_LIGHT' as const, count: passengerCounts.mildlydisabled })
+    }
+    if (passengerCounts.veteran > 0) {
+      passengers.push({ passengerType: 'VETERAN' as const, count: passengerCounts.veteran })
+    }
+    
+    return passengers
+  }
+
+  // 선택된 좌석의 seatId 배열 생성
+  const getSelectedSeatIds = () => {
+    return selectedSeats.map(seatNumber => {
+      const seat = seatList.find(s => s.seatNumber === seatNumber)
+      return seat?.seatId || 0
+    }).filter(id => id > 0)
+  }
 
   const handleBooking = async () => {
     if (!selectedTrain) return
@@ -505,26 +547,39 @@ export default function TrainSearchPage() {
       return
     }
 
-    // passengerSummary 생성
-    const passengerSummary = getPassengerSummaryForReservation()
+    // passengers 생성
+    const passengers = getPassengersForReservation()
+    
+    // 선택된 좌석의 seatId 배열 생성
+    const seatIds = getSelectedSeatIds()
+    
+    if (seatIds.length === 0) {
+      alert("선택된 좌석 정보를 찾을 수 없습니다.")
+      return
+    }
 
     // 예약 요청 데이터
+    if (!selectedTrain.trainScheduleId) {
+      alert("열차 스케줄 정보를 찾을 수 없습니다.")
+      return
+    }
+    
     const reservationRequest = {
-      trainScheduleId: selectedTrain.trainScheduleId!,
-      seatId: 1, // 고정
+      trainScheduleId: selectedTrain.trainScheduleId,
       departureStationId,
       arrivalStationId,
-      passengerSummary,
+      passengers,
+      seatIds,
       tripType: 'OW' as const,
     }
 
     try {
       const response = await makeReservation(reservationRequest)
       if (response.result) {
-        const { reservationId, seatReservationId } = response.result as { reservationId: number; seatReservationId: number }
+        const { reservationId, seatReservationIds } = response.result
         const reservationInfo: ReservationInfo = {
           reservationId, // 예약 id 저장
-          seatReservationId, // 좌석 예약 id 저장(필요시)
+          seatReservationId: seatReservationIds[0] || 0, // 첫 번째 좌석 예약 id 저장
           trainType: selectedTrain.trainType,
           trainNumber: selectedTrain.trainNumber,
           date: date ? date.toISOString().split('T')[0] : '',
@@ -552,6 +607,8 @@ export default function TrainSearchPage() {
     setSelectedTrain(null)
     setSelectedSeats([]) // 좌석 선택 초기화
     setSelectedCar(1) // 호차 선택 초기화
+    setCarList([]) // 객차 목록 초기화
+    setSeatList([]) // 좌석 목록 초기화
   }
 
   const handleSeatClick = (seatNumber: string) => {
@@ -582,6 +639,80 @@ export default function TrainSearchPage() {
 
   const getTotalPassengers = () => {
     return Object.values(passengerCounts).reduce((sum, count) => sum + count, 0)
+  }
+
+  // 객차 조회 함수
+  const fetchCars = async (trainScheduleId: number) => {
+    if (!searchData) return
+    
+    setLoadingCars(true)
+    try {
+      const departureStationId = stationUtils.getStationId(searchData.departureStation)
+      const arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
+      
+      if (!departureStationId || !arrivalStationId) {
+        console.error("역 정보를 찾을 수 없습니다.")
+        return
+      }
+      
+      const request = {
+        trainScheduleId,
+        departureStationId,
+        arrivalStationId,
+        passengerCount: getTotalPassengers()
+      }
+      
+      const response = await searchCars(request)
+      
+      if (response.result) {
+        setCarList(response.result.carInfos)
+      } else {
+        console.error("객차 조회 실패:", response.message)
+        setCarList([])
+      }
+    } catch (error) {
+      console.error("객차 조회 중 오류 발생:", error)
+      setCarList([])
+    } finally {
+      setLoadingCars(false)
+    }
+  }
+
+  // 좌석 조회 함수
+  const fetchSeats = async (trainCarId: string, trainScheduleId: number) => {
+    if (!searchData) return
+    
+    setLoadingSeats(true)
+    try {
+      const departureStationId = stationUtils.getStationId(searchData.departureStation)
+      const arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
+      
+      if (!departureStationId || !arrivalStationId) {
+        console.error("역 정보를 찾을 수 없습니다.")
+        return
+      }
+      
+      const request = {
+        trainCarId,
+        trainScheduleId,
+        departureStationId,
+        arrivalStationId
+      }
+      
+      const response = await searchSeats(request)
+      
+      if (response.result) {
+        setSeatList(response.result.seatList)
+      } else {
+        console.error("좌석 조회 실패:", response.message)
+        setSeatList([])
+      }
+    } catch (error) {
+      console.error("좌석 조회 중 오류 발생:", error)
+      setSeatList([])
+    } finally {
+      setLoadingSeats(false)
+    }
   }
 
   const [hasNext, setHasNext] = useState(false)
@@ -658,6 +789,15 @@ export default function TrainSearchPage() {
         onApply={handleSeatSelectionApply}
         getSeatTypeName={getSeatTypeName}
         getTotalPassengers={getTotalPassengers}
+        carList={carList}
+        seatList={seatList}
+        loadingCars={loadingCars}
+        loadingSeats={loadingSeats}
+        onCarSelect={(carId: string) => {
+          if (selectedTrain && selectedTrain.trainScheduleId) {
+            fetchSeats(carId, selectedTrain.trainScheduleId)
+          }
+        }}
       />
 
       {/* Booking Panel */}
@@ -680,6 +820,8 @@ export default function TrainSearchPage() {
         getTrainTypeColor={getTrainTypeColor}
         getSeatTypeName={getSeatTypeName}
         formatPrice={formatPrice}
+        carList={carList}
+        loadingCars={loadingCars}
       />
 
       <Footer />
