@@ -39,6 +39,7 @@ interface SearchFormProps {
   onDateChange: (date: Date) => void
   onPassengerChange: (passengers: PassengerCounts) => void
   onSearch: () => void
+  onBothStationsChange?: (departure: string, arrival: string) => void
 }
 
 export function SearchForm({
@@ -53,6 +54,7 @@ export function SearchForm({
   onDateChange,
   onPassengerChange,
   onSearch,
+  onBothStationsChange,
 }: SearchFormProps) {
   return (
     <Card className="mb-6">
@@ -66,6 +68,11 @@ export function SearchForm({
                 onValueChange={onDepartureStationChange}
                 placeholder="출발역 선택"
                 label=""
+                otherStation={searchData?.arrivalStation || arrivalStation}
+                onBothStationsChange={onBothStationsChange || ((departure, arrival) => {
+                  onDepartureStationChange(departure)
+                  onArrivalStationChange(arrival)
+                })}
               />
             </div>
 
@@ -78,6 +85,11 @@ export function SearchForm({
                 onValueChange={onArrivalStationChange}
                 placeholder="도착역 선택"
                 label=""
+                otherStation={searchData?.departureStation || departureStation}
+                onBothStationsChange={onBothStationsChange || ((departure, arrival) => {
+                  onDepartureStationChange(departure)
+                  onArrivalStationChange(arrival)
+                })}
               />
             </div>
 

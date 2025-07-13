@@ -130,6 +130,39 @@ export default function TrainSearchPage() {
     setLoading(true)
     
     try {
+      // 검색 기록 저장
+      const searchHistory = {
+        departure: searchData.departureStation,
+        arrival: searchData.arrivalStation,
+        timestamp: Date.now()
+      }
+      
+      // 기존 검색 기록 가져오기
+      const existingHistory = localStorage.getItem('rail-o-search-history')
+      let historyArray: any[] = []
+      
+      if (existingHistory) {
+        try {
+          historyArray = JSON.parse(existingHistory)
+        } catch (error) {
+          console.error('기존 검색 기록 파싱 실패:', error)
+        }
+      }
+      
+      // 중복 제거 (같은 출발역-도착역 조합이 있으면 제거)
+      historyArray = historyArray.filter(item => 
+        !(item.departure === searchHistory.departure && item.arrival === searchHistory.arrival)
+      )
+      
+      // 새 기록을 맨 앞에 추가
+      historyArray.unshift(searchHistory)
+      
+      // 최대 3개까지만 유지
+      historyArray = historyArray.slice(0, 3)
+      
+      // 로컬 스토리지에 저장
+      localStorage.setItem('rail-o-search-history', JSON.stringify(historyArray))
+      
       // 총 승객 수 계산
       const totalPassengers = Object.values(searchData.passengers).reduce((sum: number, count: any) => sum + (count as number), 0)
 
@@ -736,6 +769,22 @@ export default function TrainSearchPage() {
             onDateChange={handleDateChange}
             onPassengerChange={handlePassengerChange}
             onSearch={handleUpdateSearch}
+            onBothStationsChange={(departure, arrival) => {
+              // 두 역을 동시에 변경할 때 searchData도 업데이트
+              if (searchData) {
+                const updatedSearchData = {
+                  ...searchData,
+                  departureStation: departure,
+                  arrivalStation: arrival
+                }
+                setSearchData(updatedSearchData)
+                localStorage.setItem('searchData', JSON.stringify(updatedSearchData))
+              }
+              // departureStation과 arrivalStation 상태도 직접 업데이트
+              setDepartureStation(departure)
+              setArrivalStation(arrival)
+              setSearchConditionsChanged(true)
+            }}
           />
 
           {/* Train List */}

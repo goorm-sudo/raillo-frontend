@@ -29,12 +29,14 @@ export default function Header() {
       await logout()
       tokenManager.removeToken()
       updateLoginStatus()
+      alert("로그아웃되었습니다.")
       router.push("/")
     } catch (error: any) {
       console.error("로그아웃 에러:", error)
       // 로그아웃 API 실패해도 로컬 토큰은 제거
       tokenManager.removeToken()
       updateLoginStatus()
+      alert("로그아웃되었습니다.")
       router.push("/")
     }
   }

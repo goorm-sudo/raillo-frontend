@@ -85,4 +85,9 @@ export const getCart = async () => {
   return api.get<CartResponse>("/api/v1/cart/reservations")
 }
 
+// 예약 목록 조회 함수
+export const getReservationList = async () => {
+  return api.get<ReservationDetailResponse[]>("/api/v1/booking/reservation")
+}
+
  

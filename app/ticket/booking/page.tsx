@@ -80,6 +80,39 @@ export default function TicketBookingPage() {
       return
     }
 
+    // 검색 기록 저장
+    const searchHistory = {
+      departure: departureStation,
+      arrival: arrivalStation,
+      timestamp: Date.now()
+    }
+    
+    // 기존 검색 기록 가져오기
+    const existingHistory = localStorage.getItem('rail-o-search-history')
+    let historyArray: any[] = []
+    
+    if (existingHistory) {
+      try {
+        historyArray = JSON.parse(existingHistory)
+      } catch (error) {
+        console.error('기존 검색 기록 파싱 실패:', error)
+      }
+    }
+    
+    // 중복 제거 (같은 출발역-도착역 조합이 있으면 제거)
+    historyArray = historyArray.filter(item => 
+      !(item.departure === searchHistory.departure && item.arrival === searchHistory.arrival)
+    )
+    
+    // 새 기록을 맨 앞에 추가
+    historyArray.unshift(searchHistory)
+    
+    // 최대 3개까지만 유지
+    historyArray = historyArray.slice(0, 3)
+    
+    // 로컬 스토리지에 저장
+    localStorage.setItem('rail-o-search-history', JSON.stringify(historyArray))
+
     // 검색 조건을 localStorage에 저장하여 새로고침 시에도 유지
     const searchData = {
       departureStation,
@@ -144,6 +177,11 @@ export default function TicketBookingPage() {
                     placeholder="출발역을 선택하세요"
                     label="출발역"
                     variant="white"
+                    otherStation={arrivalStation}
+                    onBothStationsChange={(departure, arrival) => {
+                      setDepartureStation(departure)
+                      setArrivalStation(arrival)
+                    }}
                   />
                 </div>
 
@@ -160,6 +198,11 @@ export default function TicketBookingPage() {
                     placeholder="도착역을 선택하세요"
                     label="도착역"
                     variant="white"
+                    otherStation={departureStation}
+                    onBothStationsChange={(departure, arrival) => {
+                      setDepartureStation(departure)
+                      setArrivalStation(arrival)
+                    }}
                   />
                 </div>
               </div>
