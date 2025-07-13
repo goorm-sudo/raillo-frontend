@@ -74,7 +74,7 @@ export function TrainList({
   }
 
   return (
-    <>
+    <div className="space-y-4">
       {displayedTrains.map((train) => (
         <TrainCard
           key={train.id}
@@ -111,6 +111,6 @@ export function TrainList({
           </Button>
         </div>
       )}
-    </>
+    </div>
   )
 } 

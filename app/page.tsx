@@ -179,14 +179,6 @@ export default function HomePage() {
                   </Link>
 
                   <Link
-                    href="/ticket/regular"
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <CalendarIcon className="h-5 w-5 text-purple-600" />
-                    <span className="text-gray-700">정기 승차권</span>
-                  </Link>
-
-                  <Link
                     href="/ticket/reservations"
                     className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
                   >

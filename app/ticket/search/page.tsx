@@ -6,7 +6,7 @@ import {format} from "date-fns"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import {searchTrains, stationUtils, searchCars, searchSeats} from "@/lib/api/train"
-import {makeReservation} from "@/lib/api/booking"
+import {makeReservation, addToCart as addToCartAPI} from "@/lib/api/booking"
 import { handleError } from '@/lib/utils/errorHandler'
 import {SeatSelectionDialog} from "@/components/ui/seat-selection-dialog"
 import {BookingPanel} from "@/components/ui/booking-panel"
@@ -14,6 +14,7 @@ import {SearchForm} from "@/components/ui/search-form"
 import {TrainList} from "@/components/ui/train-list"
 import {UsageInfo} from "@/components/ui/usage-info"
 import {tokenManager} from "@/lib/auth"
+import { ko } from 'date-fns/locale'
 
 // 2. Add PassengerCounts interface
 interface PassengerCounts {
@@ -89,11 +90,23 @@ export default function TrainSearchPage() {
     arrivalStation: string
     departureDate: string
     departureHour: string
+    returnDate?: string
+    returnHour?: string
     passengers: PassengerCounts
+    tripType?: string
   } | null>(null)
 
   // Date selection state
   const [date, setDate] = useState<Date | undefined>(new Date())
+  const [returnDate, setReturnDate] = useState<Date | undefined>(new Date())
+
+  // 왕복 관련 상태
+  const [isRoundtrip, setIsRoundtrip] = useState(false)
+  const [outboundTrains, setOutboundTrains] = useState<TrainInfo[]>([])
+  const [inboundTrains, setInboundTrains] = useState<TrainInfo[]>([])
+  const [selectedOutboundTrain, setSelectedOutboundTrain] = useState<TrainInfo | null>(null)
+  const [selectedInboundTrain, setSelectedInboundTrain] = useState<TrainInfo | null>(null)
+  const [outboundReserved, setOutboundReserved] = useState(false) // 가는 열차 예매 완료 여부
 
   // Passenger selection state
   const [passengerCounts, setPassengerCounts] = useState<PassengerCounts>({
@@ -176,6 +189,7 @@ export default function TrainSearchPage() {
         return
       }
 
+      // 가는 열차 검색
       const searchRequest = {
         departureStationId,
         arrivalStationId,
@@ -211,42 +225,113 @@ export default function TrainSearchPage() {
             price: train.firstClassSeat?.fare || 13200 
           },
           standingSeat: { 
-            available: train.standing?.canReserve === true, 
-            price: train.standing?.fare || 0 
-          },
+            available: train.standingSeat?.canReserve === true, 
+            price: train.standingSeat?.fare || 4200 
+          }
         }))
-        
-        // 페이지네이션 정보 처리
-        const totalElements = response.result.totalElements || apiTrains.length
-        const totalPages = response.result.totalPages || 1
-        const hasNext = response.result.hasNext ?? false
-        
+
         setAllTrains(apiTrains)
-        setDisplayedTrains(apiTrains) // 모든 데이터를 먼저 보여줌
-        setTotalResults(totalElements)
-        setCurrentPage(0) // 페이지 0으로 초기화
-        setHasNext(hasNext)
+        setDisplayedTrains(apiTrains)
+        setTotalResults(response.result.totalElements || apiTrains.length)
+        
+        // 왕복일 때는 가는 열차만 먼저 검색 (오는 열차는 예매 완료 후 검색)
+        // if (searchData.tripType === 'roundtrip' && searchData.returnDate) {
+        //   await fetchInboundTrains(searchData, totalPassengers)
+        // }
       } else {
-        console.error("열차 조회 실패:", response.message)
-        // 실패 시 빈 결과로 설정 (alert 제거)
         setAllTrains([])
         setDisplayedTrains([])
         setTotalResults(0)
-        setHasNext(false)
       }
     } catch (error) {
-      console.error("열차 조회 중 오류 발생:", error)
-      
-      // 오류 시 빈 결과로 설정 (alert 제거)
+      console.error('열차 검색 실패:', error)
       setAllTrains([])
       setDisplayedTrains([])
       setTotalResults(0)
-      setHasNext(false)
     } finally {
       setLoading(false)
     }
   }
 
+  // 오는 열차 검색 함수
+  const fetchInboundTrains = async (searchData: any, totalPassengers: number) => {
+    try {
+      const departureStationId = stationUtils.getStationId(searchData.arrivalStation) // 출발역과 도착역이 바뀜
+      const arrivalStationId = stationUtils.getStationId(searchData.departureStation)
+
+      if (!departureStationId || !arrivalStationId) {
+        console.error("역 정보를 찾을 수 없습니다.")
+        return
+      }
+
+      const searchRequest = {
+        departureStationId,
+        arrivalStationId,
+        operationDate: searchData.returnDate,
+        passengerCount: totalPassengers,
+        departureHour: searchData.returnHour?.replace("시", "") || "00"
+      }
+
+      const response = await searchTrains(searchRequest, 0, 10)
+      
+      if (response.result) {
+        const content = response.result.content || response.result
+        const resultArray = Array.isArray(content) ? content : [content]
+        
+        const inboundTrains: TrainInfo[] = resultArray.map((train: any, index: number) => ({
+          trainScheduleId: train.trainScheduleId || 0,
+          id: `inbound_${train.trainNumber || train.id || index}_${train.departureTime || index}_${index}`,
+          trainType: train.trainName || train.trainType || "KTX",
+          trainNumber: train.trainNumber || `${index + 1}`,
+          departureTime: train.departureTime ? train.departureTime.substring(0, 5) : "00:00",
+          arrivalTime: train.arrivalTime ? train.arrivalTime.substring(0, 5) : "00:00",
+          duration: train.formattedTravelTime || train.travelTime || "0시간 0분",
+          departureStation: train.departureStationName || train.departureStation || searchData.arrivalStation,
+          arrivalStation: train.arrivalStationName || train.arrivalStation || searchData.departureStation,
+          generalSeat: { 
+            available: train.standardSeat?.canReserve === true, 
+            price: train.standardSeat?.fare || 8400 
+          },
+          reservedSeat: { 
+            available: train.firstClassSeat?.canReserve === true, 
+            price: train.firstClassSeat?.fare || 13200 
+          },
+          standingSeat: { 
+            available: train.standingSeat?.canReserve === true, 
+            price: train.standingSeat?.fare || 4200 
+          }
+        }))
+
+        setInboundTrains(inboundTrains)
+      }
+    } catch (error) {
+      console.error('오는 열차 검색 실패:', error)
+    }
+  }
+
+  // 왕복일 때 가는 열차 예매 완료 후 오는 열차 검색
+  const fetchInboundTrainsAfterReservation = async () => {
+    if (!searchData || !searchData.returnDate) return
+    
+    setLoading(true)
+    try {
+      const totalPassengers = Object.values(searchData.passengers).reduce((sum: number, count: any) => sum + (count as number), 0)
+      await fetchInboundTrains(searchData, totalPassengers)
+    } catch (error) {
+      console.error('오는 열차 검색 실패:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 왕복일 때 가는 열차 예매 완료 처리
+  const handleOutboundReservationComplete = async () => {
+    setOutboundReserved(true)
+    // 오는 열차 검색
+    await fetchInboundTrainsAfterReservation()
+  }
+
+  // Load search data from localStorage on component mount
   useEffect(() => {
     if (didFetchTrains.current) return;
     didFetchTrains.current = true;
@@ -265,6 +350,15 @@ export default function TrainSearchPage() {
         setDepartureStation(parsedData.departureStation)
         setArrivalStation(parsedData.arrivalStation)
         setSearchConditionsChanged(false)
+        
+        // 왕복 여부 확인
+        if (parsedData.tripType === 'roundtrip') {
+          setIsRoundtrip(true)
+          if (parsedData.returnDate) {
+            setReturnDate(new Date(parsedData.returnDate))
+          }
+        }
+        
         // 실제 API 호출
         fetchTrainsFromAPI(parsedData)
       } catch (error) {
@@ -293,13 +387,30 @@ export default function TrainSearchPage() {
       return
     }
 
+    // 가는 날짜가 오늘보다 이전인지 확인
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (date < today) {
+      alert("가는 날짜는 오늘 이후여야 합니다.")
+      return
+    }
+
+    // 왕복일 때 오는 날짜가 가는 날짜보다 이전인지 확인
+    if (searchData?.tripType === 'roundtrip' && returnDate && returnDate <= date) {
+      alert("오는 날짜는 가는 날짜보다 늦어야 합니다.")
+      return
+    }
+
     // 새로운 검색 조건 생성
     const newSearchData = {
       departureStation: departureStation,
       arrivalStation: arrivalStation,
       departureDate: format(date, "yyyy-MM-dd"),
       departureHour: searchData?.departureHour || date.getHours().toString().padStart(2, '0'),
-      passengers: passengerCounts
+      returnDate: searchData?.returnDate,
+      returnHour: searchData?.returnHour,
+      passengers: passengerCounts,
+      tripType: searchData?.tripType
     }
 
     // localStorage에 새로운 검색 조건 저장
@@ -614,12 +725,83 @@ export default function TrainSearchPage() {
         const { reservationId } = response.result
         // 예약 ID를 세션 스토리지에 임시 저장 (API 호출용)
         sessionStorage.setItem('tempReservationId', reservationId.toString())
-        router.push('/ticket/reservation')
+        
+        // 왕복일 때는 가는 열차 예매 완료 처리
+        if (isRoundtrip && !outboundReserved) {
+          // 가는 열차를 장바구니에 추가
+          await addToCart(selectedTrain, selectedSeatType, true)
+          await handleOutboundReservationComplete()
+          // 예매 패널 닫기
+          closeBookingPanel()
+          // 성공 메시지
+          alert('가는 열차가 장바구니에 추가되었습니다. 이제 오는 열차를 선택하세요.')
+        } else if (isRoundtrip && outboundReserved) {
+          // 오는 열차를 장바구니에 추가
+          await addToCart(selectedTrain, selectedSeatType, false)
+          // 예매 패널 닫기
+          closeBookingPanel()
+          // 장바구니로 이동
+          router.push('/cart')
+        } else {
+          // 편도인 경우 예약 완료 페이지로 이동
+          router.push('/ticket/reservation')
+        }
       } else {
         alert("예약에 실패했습니다.")
       }
     } catch (e: any) {
       handleError(e, "예약 요청 중 오류가 발생했습니다.")
+    }
+  }
+
+  // 왕복 예매 시 장바구니에 추가
+  const addToCart = async (train: TrainInfo, seatType: SeatType, isOutbound: boolean) => {
+    if (!searchData) return
+
+    try {
+      // 예약 ID를 세션 스토리지에서 가져오기
+      const reservationId = sessionStorage.getItem('tempReservationId')
+      if (!reservationId) {
+        console.error('예약 ID를 찾을 수 없습니다.')
+        return
+      }
+
+      // 실제 API 호출
+      const response = await addToCartAPI({ reservationId: parseInt(reservationId) })
+      
+      if (response.result) {
+        console.log('장바구니에 추가됨:', response.result)
+        
+        // localStorage에도 백업 저장 (선택사항)
+        const cartItem = {
+          trainScheduleId: train.trainScheduleId,
+          departureStation: isOutbound ? searchData.departureStation : searchData.arrivalStation,
+          arrivalStation: isOutbound ? searchData.arrivalStation : searchData.departureStation,
+          operationDate: isOutbound ? searchData.departureDate : searchData.returnDate,
+          seatType: seatType,
+          passengers: getPassengersForReservation(),
+          tripType: 'roundtrip',
+          direction: isOutbound ? 'outbound' : 'inbound',
+          reservationId: parseInt(reservationId)
+        }
+
+        const existingCart = localStorage.getItem('rail-o-cart')
+        let cartItems = []
+        
+        if (existingCart) {
+          try {
+            cartItems = JSON.parse(existingCart)
+          } catch (error) {
+            console.error('기존 장바구니 파싱 실패:', error)
+          }
+        }
+        
+        cartItems.push(cartItem)
+        localStorage.setItem('rail-o-cart', JSON.stringify(cartItems))
+      }
+    } catch (error) {
+      console.error('장바구니 추가 실패:', error)
+      throw error
     }
   }
 
@@ -749,6 +931,23 @@ export default function TrainSearchPage() {
 
   const [hasNext, setHasNext] = useState(false)
 
+  // 오는 날짜 변경 핸들러
+  const handleReturnDateChange = (newDate: Date) => {
+    setReturnDate(newDate)
+    setSearchConditionsChanged(true)
+    
+    // 현재 검색 조건이 있으면 업데이트만 하고 검색은 하지 않음
+    if (searchData) {
+      const updatedSearchData = {
+        ...searchData,
+        returnDate: format(newDate, "yyyy-MM-dd"),
+        returnHour: newDate.getHours().toString().padStart(2, '0')
+      }
+      setSearchData(updatedSearchData)
+      localStorage.setItem('searchData', JSON.stringify(updatedSearchData))
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
@@ -773,11 +972,13 @@ export default function TrainSearchPage() {
             departureStation={departureStation}
             arrivalStation={arrivalStation}
             date={date}
+            returnDate={returnDate}
             passengerCounts={passengerCounts}
             searchConditionsChanged={searchConditionsChanged}
             onDepartureStationChange={handleDepartureStationChange}
             onArrivalStationChange={handleArrivalStationChange}
             onDateChange={handleDateChange}
+            onReturnDateChange={handleReturnDateChange}
             onPassengerChange={handlePassengerChange}
             onSearch={handleUpdateSearch}
             onBothStationsChange={(departure, arrival) => {
@@ -802,23 +1003,88 @@ export default function TrainSearchPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">
-                검색 결과
+                {isRoundtrip ? "왕복 열차 검색 결과" : "검색 결과"}
               </h2>
               <div className="text-sm text-gray-600">* 요금은 어른 기준이며, 할인 혜택이 적용될 수 있습니다.</div>
             </div>
 
-            <TrainList
-              displayedTrains={displayedTrains}
-              totalResults={totalResults}
-              selectedTrain={selectedTrain}
-              loadingMore={loadingMore}
-              hasMoreTrains={hasNext}
-              onSeatSelection={handleSeatSelection}
-              onLoadMore={handleLoadMore}
-              getTrainTypeColor={getTrainTypeColor}
-              formatPrice={formatPrice}
-              getSeatTypeName={getSeatTypeName}
-            />
+            {isRoundtrip ? (
+              <div className="space-y-6">
+                {/* 가는 열차 목록 */}
+                {!outboundReserved && (
+                  <div>
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">가는 열차</h3>
+                      <p className="text-sm text-gray-600">
+                        {searchData?.departureStation} → {searchData?.arrivalStation} 
+                        ({format(new Date(searchData?.departureDate || ''), 'M월 d일 (E)', { locale: ko })})
+                      </p>
+                    </div>
+                    <TrainList
+                      displayedTrains={displayedTrains}
+                      totalResults={totalResults}
+                      selectedTrain={selectedOutboundTrain}
+                      loadingMore={loadingMore}
+                      hasMoreTrains={hasNext}
+                      onSeatSelection={(train, seatType) => {
+                        setSelectedOutboundTrain(train)
+                        handleSeatSelection(train, seatType)
+                      }}
+                      onLoadMore={handleLoadMore}
+                      getTrainTypeColor={getTrainTypeColor}
+                      formatPrice={formatPrice}
+                      getSeatTypeName={getSeatTypeName}
+                    />
+                  </div>
+                )}
+
+                {/* 오는 열차 목록 */}
+                {outboundReserved && (
+                  <div>
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">오는 열차</h3>
+                      <p className="text-sm text-gray-600">
+                        {searchData?.arrivalStation} → {searchData?.departureStation}
+                        ({format(new Date(searchData?.returnDate || ''), 'M월 d일 (E)', { locale: ko })})
+                      </p>
+                      <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-800">
+                          ✓ 가는 열차 예매가 완료되었습니다. 이제 오는 열차를 선택하세요.
+                        </p>
+                      </div>
+                    </div>
+                    <TrainList
+                      displayedTrains={inboundTrains}
+                      totalResults={inboundTrains.length}
+                      selectedTrain={selectedInboundTrain}
+                      loadingMore={false}
+                      hasMoreTrains={false}
+                      onSeatSelection={(train, seatType) => {
+                        setSelectedInboundTrain(train)
+                        handleSeatSelection(train, seatType)
+                      }}
+                      onLoadMore={() => {}}
+                      getTrainTypeColor={getTrainTypeColor}
+                      formatPrice={formatPrice}
+                      getSeatTypeName={getSeatTypeName}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <TrainList
+                displayedTrains={displayedTrains}
+                totalResults={totalResults}
+                selectedTrain={selectedTrain}
+                loadingMore={loadingMore}
+                hasMoreTrains={hasNext}
+                onSeatSelection={handleSeatSelection}
+                onLoadMore={handleLoadMore}
+                getTrainTypeColor={getTrainTypeColor}
+                formatPrice={formatPrice}
+                getSeatTypeName={getSeatTypeName}
+              />
+            )}
           </div>
 
           {/* Usage Info */}

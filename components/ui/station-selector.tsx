@@ -15,6 +15,7 @@ interface StationSelectorProps {
   variant?: "blue" | "white"
   otherStation?: string // 다른 역 (출발역이면 도착역, 도착역이면 출발역)
   onBothStationsChange?: (departure: string, arrival: string) => void // 두 역을 동시에 변경할 때
+  disabled?: boolean // 비활성화 여부
 }
 
 interface SearchHistory {
@@ -33,7 +34,8 @@ export function StationSelector({
   label, 
   variant = "blue",
   otherStation = "",
-  onBothStationsChange
+  onBothStationsChange,
+  disabled
 }: StationSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -93,6 +95,7 @@ export function StationSelector({
           variant="outline"
           className="w-full justify-start text-left font-normal bg-white text-gray-900 hover:bg-gray-50"
           onClick={() => setIsOpen(true)}
+          disabled={disabled}
         >
           <MapPin className="mr-2 h-4 w-4" />
           {value || placeholder}

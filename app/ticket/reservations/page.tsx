@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from '@/hooks/use-auth'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -35,6 +36,7 @@ import {
 
 export default function ReservationsPage() {
   const router = useRouter()
+  const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/ticket/reservations' })
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [selectedReservation, setSelectedReservation] = useState<number | null>(null)
   const [reservations, setReservations] = useState<ReservationDetailResponse[]>([])
@@ -43,6 +45,9 @@ export default function ReservationsPage() {
 
   // 예약 목록 조회
   useEffect(() => {
+    // 로그인 상태가 확인된 후에만 예약 목록을 조회
+    if (isChecking || !isAuthenticated) return
+    
     const fetchReservations = async () => {
       try {
         setLoading(true)
@@ -62,7 +67,7 @@ export default function ReservationsPage() {
     }
 
     fetchReservations()
-  }, [])
+  }, [isChecking, isAuthenticated])
 
   const getTrainTypeColor = (trainName: string) => {
     switch (trainName) {
@@ -87,18 +92,9 @@ export default function ReservationsPage() {
     return seats.reduce((total, seat) => total + seat.fare, 0)
   }
 
-  const getTimeRemaining = (expiresAt: string) => {
-    const now = new Date()
-    const deadline = new Date(expiresAt)
-    const diff = deadline.getTime() - now.getTime()
-
-    if (diff <= 0) {
-      return "결제 기한 만료"
-    }
-
-    const minutes = Math.floor(diff / (1000 * 60))
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-    return `${minutes}분 ${seconds}초 남음`
+  const getSeatSummary = (seats: ReservationDetailResponse['seats']) => {
+    const seatType = seats[0]?.carType === "FIRST_CLASS" ? "특실" : "일반실"
+    return `${seatType} ${seats.length}매`
   }
 
   const isExpired = (expiresAt: string) => {
@@ -141,6 +137,20 @@ export default function ReservationsPage() {
     // 예약 ID를 세션 스토리지에 저장하고 결제 페이지로 이동
     sessionStorage.setItem('tempReservationId', reservationId.toString())
     router.push("/ticket/payment")
+  }
+
+  // 로그인 상태 확인 중이거나 인증되지 않은 경우 로딩 표시
+  if (isChecking || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">인증을 확인하고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
   }
 
   if (loading) {
@@ -202,136 +212,126 @@ export default function ReservationsPage() {
           <div className="space-y-4">
             <h3 className="text-xl font-bold text-gray-900">예약 내역</h3>
 
-            {reservations.length === 0 ? (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">예약 내역이 없습니다</h3>
-                  <p className="text-gray-600 mb-6">새로운 예약을 진행하세요.</p>
-                  <Link href="/ticket/booking">
-                    <Button className="bg-blue-600 hover:bg-blue-700">승차권 예매하기</Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ) : (
-              reservations.map((reservation) => {
-                const expired = isExpired(reservation.expiresAt)
+            {(() => {
+              const validReservations = reservations.filter(reservation => !isExpired(reservation.expiresAt))
+              
+              if (reservations.length === 0) {
                 return (
-                  <Card
-                    key={reservation.reservationId}
-                    className={`${expired ? "bg-gray-50 border-gray-300" : "border-blue-200"}`}
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center space-x-3">
-                          <Badge className={`${getTrainTypeColor(reservation.trainName)} px-3 py-1`}>
-                            {reservation.trainName}
-                          </Badge>
-                          <span className="text-lg font-bold">{reservation.trainNumber}</span>
-                          <span className="text-gray-600">{formatDate(reservation.operationDate)}</span>
-                          {expired && (
-                            <Badge variant="destructive" className="bg-red-600">
-                              결제기한만료
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xl font-bold text-blue-600">{formatPrice(getTotalPrice(reservation.seats))}</div>
-                          <div className="text-xs text-gray-500">예약번호: {reservation.reservationCode}</div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        {/* Route Info */}
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            운행 정보
-                          </h4>
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium">{reservation.departureStationName}</span>
-                              <ArrowRight className="h-3 w-3 text-gray-400" />
-                              <span className="font-medium">{reservation.arrivalStationName}</span>
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {formatTime(reservation.departureTime)} ~ {formatTime(reservation.arrivalTime)}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Seat Info */}
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-2">좌석 정보</h4>
-                          <div className="space-y-1">
-                            {reservation.seats.map((seat, index) => (
-                              <div key={seat.seatReservationId} className="text-sm">
-                                <div>{seat.carType === "FIRST_CLASS" ? "특실" : "일반실"}</div>
-                                <div className="text-gray-600">
-                                  {seat.carNumber}호차 {seat.seatNumber}
-                                </div>
-                                <Badge variant="outline" className="text-xs">
-                                  {seat.passengerType === "ADULT" ? "어른" : 
-                                   seat.passengerType === "CHILD" ? "어린이" :
-                                   seat.passengerType === "SENIOR" ? "경로" :
-                                   seat.passengerType === "DISABLED_HEAVY" ? "중증장애인" :
-                                   seat.passengerType === "DISABLED_LIGHT" ? "경증장애인" :
-                                   seat.passengerType === "VETERAN" ? "국가유공자" :
-                                   seat.passengerType === "INFANT" ? "유아" : seat.passengerType}
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Payment Deadline */}
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                            <Clock className="h-4 w-4 mr-1" />
-                            결제 기한
-                          </h4>
-                          <div className="space-y-1">
-                            <div className="text-sm">
-                              {format(new Date(reservation.expiresAt), "MM/dd HH:mm", { locale: ko })}
-                            </div>
-                            <div
-                              className={`text-sm font-medium ${
-                                expired ? "text-red-600" : "text-orange-600"
-                              }`}
-                            >
-                              {getTimeRemaining(reservation.expiresAt)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex justify-end space-x-2 pt-4 border-t">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCancelReservation(reservation.reservationId)}
-                          className="text-red-600 border-red-600 hover:bg-red-50"
-                        >
-                          <X className="h-4 w-4 mr-1" />
-                          예약취소
-                        </Button>
-                        {!expired && (
-                          <Button
-                            size="sm"
-                            onClick={() => handlePayment(reservation.reservationId)}
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            <CreditCard className="h-4 w-4 mr-1" />
-                            결제하기
-                          </Button>
-                        )}
-                      </div>
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">예약 내역이 없습니다</h3>
+                      <p className="text-gray-600 mb-6">새로운 예약을 진행하세요.</p>
+                      <Link href="/ticket/booking">
+                        <Button className="bg-blue-600 hover:bg-blue-700">승차권 예매하기</Button>
+                      </Link>
                     </CardContent>
                   </Card>
                 )
-              })
-            )}
+              }
+              
+              if (validReservations.length === 0) {
+                return (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">유효한 예약이 없습니다</h3>
+                      <p className="text-gray-600 mb-6">결제 기한이 지난 예약은 자동으로 삭제됩니다.</p>
+                      <Link href="/ticket/booking">
+                        <Button className="bg-blue-600 hover:bg-blue-700">승차권 예매하기</Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                )
+              }
+              
+              return validReservations.map((reservation) => (
+                <Card
+                  key={reservation.reservationId}
+                  className="border-blue-200"
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <Badge className={`${getTrainTypeColor(reservation.trainName)} px-3 py-1`}>
+                          {reservation.trainName}
+                        </Badge>
+                        <span className="text-lg font-bold">{reservation.trainNumber}</span>
+                        <span className="text-gray-600">{formatDate(reservation.operationDate)}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-blue-600">{formatPrice(getTotalPrice(reservation.seats))}</div>
+                        <div className="text-xs text-gray-500">예약번호: {reservation.reservationCode}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      {/* Route Info */}
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                          <MapPin className="h-4 w-4 mr-1" />
+                          운행 정보
+                        </h4>
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium">{reservation.departureStationName}</span>
+                            <ArrowRight className="h-3 w-3 text-gray-400" />
+                            <span className="font-medium">{reservation.arrivalStationName}</span>
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {formatTime(reservation.departureTime)} ~ {formatTime(reservation.arrivalTime)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Seat Info */}
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2">좌석 정보</h4>
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium">
+                            {getSeatSummary(reservation.seats)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payment Deadline */}
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                          <Clock className="h-4 w-4 mr-1" />
+                          결제 기한
+                        </h4>
+                        <div className="space-y-1">
+                          <div className="text-sm">
+                            {format(new Date(reservation.expiresAt), "MM/dd HH:mm", { locale: ko })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-end space-x-2 pt-4 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCancelReservation(reservation.reservationId)}
+                        className="text-red-600 border-red-600 hover:bg-red-50"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        예약취소
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handlePayment(reservation.reservationId)}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <CreditCard className="h-4 w-4 mr-1" />
+                        결제하기
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            })()}
           </div>
 
           {/* Notice */}
