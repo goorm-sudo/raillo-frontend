@@ -1005,7 +1005,7 @@ export default function TrainSearchPage() {
               <h2 className="text-xl font-bold text-gray-900">
                 {isRoundtrip ? "왕복 열차 검색 결과" : "검색 결과"}
               </h2>
-              <div className="text-sm text-gray-600">* 요금은 어른 기준이며, 할인 혜택이 적용될 수 있습니다.</div>
+              <div className="text-sm text-gray-600">* 요금은 어른 기준이며, 어린이(40%)·유아(75%)·경로(30%)·장애인(30~50%)·국가유공자(50%) 할인이 적용됩니다.</div>
             </div>
 
             {isRoundtrip ? (

@@ -319,8 +319,8 @@ export default function TicketBookingPage() {
               <CardContent className="space-y-2 text-sm text-gray-600">
                 <p>• 승차권은 출발일 1개월 전부터 예매 가능합니다.</p>
                 <p>• 예매 취소는 출발시간 20분 전까지 가능합니다.</p>
-                <p>• 어린이는 만 6세~12세, 경로는 만 65세 이상입니다.</p>
-                <p>• 장애인 할인은 1~3급 장애인에게 적용됩니다.</p>
+                <p>• 어린이는 만 6세~12세, 유아는 만 6세 미만, 경로는 만 65세 이상입니다.</p>
+                <p>• 중증장애인은 1~3급, 경증장애인은 4~6급 장애인에게 적용됩니다.</p>
                 {isRoundtrip && (
                   <p>• 왕복 예매 시 가는 열차와 오는 열차를 각각 선택하세요.</p>
                 )}
@@ -332,10 +332,12 @@ export default function TicketBookingPage() {
                 <CardTitle className="text-lg">할인 혜택</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-gray-600">
-                <p>• 어린이: 일반실 50% 할인</p>
-                <p>• 경로: 일반실 30% 할인</p>
-                <p>• 장애인: 일반실 50% 할인</p>
-                <p>• 국가유공자: 일반실 30% 할인</p>
+                <p>• 어린이(6~12세): 40% 할인</p>
+                <p>• 유아(6세 미만): 75% 할인</p>
+                <p>• 경로(65세 이상): 30% 할인</p>
+                <p>• 중증장애인: 50% 할인 (보호자 1인 포함)</p>
+                <p>• 경증장애인: 30% 할인</p>
+                <p>• 국가유공자: 50% 할인</p>
               </CardContent>
             </Card>
           </div>
