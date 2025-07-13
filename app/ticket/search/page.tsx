@@ -707,9 +707,9 @@ export default function TrainSearchPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
         <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">열차 정보를 검색하고 있습니다...</p>
         </div>
@@ -719,9 +719,9 @@ export default function TrainSearchPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
       <Header />
-      <main className="container mx-auto px-4 py-8 pb-32">
+      <main className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-6xl mx-auto">
           {/* Search Form */}
           <SearchForm

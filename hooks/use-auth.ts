@@ -5,10 +5,11 @@ import { tokenManager } from '@/lib/auth'
 interface UseAuthOptions {
   redirectTo?: string
   requireAuth?: boolean
+  redirectPath?: string
 }
 
 export function useAuth(options: UseAuthOptions = {}) {
-  const { redirectTo = '/login', requireAuth = true } = options
+  const { redirectTo = '/login', requireAuth = true, redirectPath } = options
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
@@ -19,15 +20,18 @@ export function useAuth(options: UseAuthOptions = {}) {
       setIsLoggedIn(authenticated)
       
       if (requireAuth && !authenticated) {
-        // 로그인이 필요한데 로그인되지 않은 경우 리다이렉트
-        router.push(redirectTo)
+        // 리다이렉트 경로가 있으면 해당 경로로, 없으면 기본 로그인 페이지로
+        const redirectUrl = redirectPath 
+          ? `${redirectTo}?redirectTo=${encodeURIComponent(redirectPath)}`
+          : redirectTo
+        router.push(redirectUrl)
       }
       
       setIsLoading(false)
     }
 
     checkAuth()
-  }, [router, redirectTo, requireAuth])
+  }, [router, redirectTo, requireAuth, redirectPath])
 
   return {
     isLoggedIn,

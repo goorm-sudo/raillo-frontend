@@ -33,6 +33,7 @@ import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import { getCart, deleteReservation } from '@/lib/api/booking'
 import { handleError } from '@/lib/utils/errorHandler'
+import { useAuth } from '@/hooks/use-auth'
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 
@@ -64,6 +65,7 @@ export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/cart' })
 
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -72,6 +74,9 @@ export default function CartPage() {
 
   // 장바구니 데이터 로드
   useEffect(() => {
+    // 로그인 상태가 확인된 후에만 장바구니 데이터를 로드
+    if (isChecking || !isAuthenticated) return
+    
     const fetchCart = async () => {
       try {
         setLoading(true)
@@ -95,7 +100,7 @@ export default function CartPage() {
     }
 
     fetchCart()
-  }, [])
+  }, [isChecking, isAuthenticated])
 
 
 
@@ -194,11 +199,30 @@ export default function CartPage() {
   const totalPrice = selectedItems.reduce((sum, item) => sum + getTotalPrice(item), 0)
   const allSelected = cartItems.length > 0 && cartItems.every((item) => item.selected)
 
+  // 로그인 상태 확인 중
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 상태를 확인하고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  // 로그인되지 않은 경우 (리다이렉트 중)
+  if (!isAuthenticated) {
+    return null
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
         <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">장바구니를 불러오고 있습니다...</p>
         </div>
@@ -209,9 +233,9 @@ export default function CartPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
         <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
           <div className="text-red-600 mb-4">
             <p className="text-lg font-semibold">장바구니를 불러올 수 없습니다</p>
             <p className="text-sm">{error}</p>
@@ -226,11 +250,11 @@ export default function CartPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
       <Header />
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-6xl mx-auto">
           {/* Page Title */}
           <div className="text-center mb-8">
@@ -451,24 +475,6 @@ export default function CartPage() {
               </div>
             </div>
           )}
-
-          {/* Notice */}
-          <Card className="mt-8 bg-blue-50 border-blue-200">
-            <CardContent className="p-6">
-              <div className="flex items-start space-x-3">
-                <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div className="space-y-2 text-sm text-blue-800">
-                  <h3 className="font-semibold">장바구니 이용 안내</h3>
-                  <ul className="space-y-1 list-disc list-inside">
-                    <li>장바구니에 담긴 승차권은 임시 예약 상태로, 결제 완료 시 정식 예약됩니다.</li>
-                    <li>장바구니 항목은 24시간 후 자동으로 삭제됩니다.</li>
-                    <li>동일한 열차의 좌석은 선착순으로 배정되므로 빠른 결제를 권장합니다.</li>
-                    <li>여러 승차권을 한 번에 결제할 수 있어 편리합니다.</li>
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </main>
 

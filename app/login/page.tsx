@@ -36,6 +36,10 @@ export default function LoginPage() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
+  
+  // 리다이렉트 메시지 생성
+  const redirectTo = searchParams.get('redirectTo')
+  const redirectMessage = redirectTo ? '로그인이 필요한 서비스입니다.' : null
 
   // 페이지 로드 시 localStorage에서 회원번호 가져오기
   useEffect(() => {
@@ -65,9 +69,9 @@ export default function LoginPage() {
   // 로딩 중이거나 인증 확인 중일 때
   if (isLoggedIn === null) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
         <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">페이지를 불러오는 중...</p>
         </div>
@@ -157,18 +161,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
       {/* Header */}
       <Header />
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-md mx-auto">
           {/* Login Card */}
           <Card className="bg-white shadow-lg">
             <CardHeader className="text-center">
               <CardTitle className="text-2xl font-bold text-gray-900">로그인</CardTitle>
               <CardDescription className="text-gray-600">다양한 방법으로 로그인하세요</CardDescription>
+              {redirectMessage && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">{redirectMessage}</p>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
