@@ -8,8 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Train, ChevronDown, User, CreditCard, Ticket, ShoppingCart, Settings, Star, Printer, Home } from "lucide-react"
+import { updateEmail, updatePhoneNumber } from "@/lib/api/user"
+import { useToast } from "@/hooks/use-toast"
+import { useRouter } from "next/navigation"
 
 export default function ContactChangePage() {
+  const router = useRouter()
+  const { toast } = useToast()
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     ticketInfo: false,
     membershipPerformance: false,
@@ -21,6 +26,7 @@ export default function ContactChangePage() {
   const [phoneNumber1, setPhoneNumber1] = useState("")
   const [phoneNumber2, setPhoneNumber2] = useState("")
   const [phoneNumber3, setPhoneNumber3] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({
@@ -29,15 +35,85 @@ export default function ContactChangePage() {
     }))
   }
 
-  const handleEmailVerification = () => {
-    // 이메일 인증 로직
-    console.log("이메일 인증:", emailAddress)
+  const handleEmailVerification = async () => {
+    if (!emailAddress) {
+      toast({
+        title: "입력 오류",
+        description: "이메일 주소를 입력해주세요.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(emailAddress)) {
+      toast({
+        title: "입력 오류",
+        description: "올바른 이메일 형식을 입력해주세요.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await updateEmail(emailAddress)
+      toast({
+        title: "성공",
+        description: "이메일 변경 요청이 성공적으로 처리되었습니다.",
+      })
+      router.push("/mypage")
+    } catch (error) {
+      console.error('이메일 변경 실패:', error)
+      toast({
+        title: "오류",
+        description: "이메일 변경에 실패했습니다. 다시 시도해주세요.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const handlePhoneVerification = () => {
-    // 휴대폰 인증 로직
-    const fullPhoneNumber = `${phoneNumber1}-${phoneNumber2}-${phoneNumber3}`
-    console.log("휴대폰 인증:", fullPhoneNumber)
+  const handlePhoneVerification = async () => {
+    if (!phoneNumber1 || !phoneNumber2 || !phoneNumber3) {
+      toast({
+        title: "입력 오류",
+        description: "휴대폰 번호를 모두 입력해주세요.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const fullPhoneNumber = `${phoneNumber1}${phoneNumber2}${phoneNumber3}`
+    const phoneRegex = /^01[0-9]{8}$/
+    if (!phoneRegex.test(fullPhoneNumber)) {
+      toast({
+        title: "입력 오류",
+        description: "올바른 휴대폰 번호 형식을 입력해주세요.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await updatePhoneNumber(fullPhoneNumber)
+      toast({
+        title: "성공",
+        description: "휴대폰 번호 변경이 성공적으로 처리되었습니다.",
+      })
+      router.push("/mypage")
+    } catch (error) {
+      console.error('휴대폰 번호 변경 실패:', error)
+      toast({
+        title: "오류",
+        description: "휴대폰 번호 변경에 실패했습니다. 다시 시도해주세요.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -256,10 +332,11 @@ export default function ContactChangePage() {
                     </div>
                     <Button
                       onClick={handleEmailVerification}
+                      disabled={isSubmitting}
                       variant="outline"
-                      className="mt-7 px-6 py-2 rounded-full border-blue-600 text-blue-600 hover:bg-blue-50"
+                      className="mt-7 px-6 py-2 rounded-full border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
                     >
-                      이메일 인증
+                      {isSubmitting ? "처리 중..." : "이메일 인증"}
                     </Button>
                   </div>
                 </div>
@@ -308,10 +385,11 @@ export default function ContactChangePage() {
 
                     <Button
                       onClick={handlePhoneVerification}
+                      disabled={isSubmitting}
                       variant="outline"
-                      className="px-6 py-2 rounded-full border-blue-600 text-blue-600 hover:bg-blue-50"
+                      className="px-6 py-2 rounded-full border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
                     >
-                      휴대폰 인증/변경
+                      {isSubmitting ? "처리 중..." : "휴대폰 인증/변경"}
                     </Button>
                   </div>
                 </div>
