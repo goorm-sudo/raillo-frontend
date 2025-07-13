@@ -40,7 +40,7 @@ export class ApiError extends Error {
 }
 
 // 기본 헤더 설정 (토큰 자동 포함)
-const getDefaultHeaders = (): Record<string, string> => {
+const getDefaultHeaders = async (): Promise<Record<string, string>> => {
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
     };
@@ -51,6 +51,18 @@ const getDefaultHeaders = (): Record<string, string> => {
         if (token) {
             headers.Authorization = `Bearer ${token}`;
         }
+    } else {
+        // 토큰이 만료되었지만 refreshToken이 있으면 갱신 시도
+        const refreshToken = tokenManager.getRefreshToken();
+        if (refreshToken) {
+            const refreshSuccess = await tokenManager.refreshToken();
+            if (refreshSuccess) {
+                const newToken = tokenManager.getToken();
+                if (newToken) {
+                    headers.Authorization = `Bearer ${newToken}`;
+                }
+            }
+        }
     }
 
     return headers;
@@ -59,13 +71,14 @@ const getDefaultHeaders = (): Record<string, string> => {
 // API 요청 공통 함수
 async function apiRequest<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryCount: number = 0
 ): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
     const startTime = new Date();
 
     const config: RequestInit = {
-        headers: getDefaultHeaders(),
+        headers: await getDefaultHeaders(),
         ...options,
     };
 
@@ -83,6 +96,24 @@ async function apiRequest<T>(
         const duration = endTime.getTime() - startTime.getTime();
 
         if (!response.ok) {
+            // 401 에러이고 재시도하지 않았고 토큰이 있는 경우 토큰 갱신 시도
+            if (response.status === 401 && retryCount === 0 && tokenManager.getRefreshToken()) {
+                const refreshSuccess = await tokenManager.refreshToken();
+                
+                if (refreshSuccess) {
+                    // 토큰 갱신 성공 시 재시도 (최대 1회)
+                    return apiRequest<T>(endpoint, options, retryCount + 1);
+                } else {
+                    // 토큰 갱신 실패 시 사용자에게 알림
+                    const userChoice = await tokenManager.handleTokenExpiration();
+                    if (userChoice) {
+                        // 사용자가 토큰 갱신을 선택한 경우 재시도
+                        return apiRequest<T>(endpoint, options, retryCount + 1);
+                    }
+                    // 사용자가 로그아웃을 선택한 경우 에러 처리로 넘어감
+                }
+            }
+
             // 서버 에러 응답 형식에 맞게 처리
             const errorData = data as ApiErrorResponse;
             
@@ -95,7 +126,8 @@ async function apiRequest<T>(
                 errorCode: errorData.errorCode,
                 errorMessage: errorData.errorMessage,
                 duration: `${duration}ms`,
-                timestamp: endTime.toISOString()
+                timestamp: endTime.toISOString(),
+                retryCount
             });
             
             if (errorData.errorMessage) {
@@ -133,7 +165,8 @@ async function apiRequest<T>(
             statusText: response.statusText,
             data,
             duration: `${duration}ms`,
-            timestamp: endTime.toISOString()
+            timestamp: endTime.toISOString(),
+            retryCount
         });
 
         return data as ApiResponse<T>;
@@ -147,7 +180,8 @@ async function apiRequest<T>(
             method: config.method || 'GET',
             error: error.message,
             duration: `${duration}ms`,
-            timestamp: endTime.toISOString()
+            timestamp: endTime.toISOString(),
+            retryCount
         });
         throw error;
     }

@@ -51,6 +51,8 @@ interface BookingPanelProps {
   // 새로운 props 추가
   carList: CarInfo[]
   loadingCars: boolean
+  // 좌석 정보 새로고침 함수 추가
+  onRefreshSeats: () => void
 }
 
 export function BookingPanel({
@@ -67,6 +69,7 @@ export function BookingPanel({
   formatPrice,
   carList,
   loadingCars,
+  onRefreshSeats,
 }: BookingPanelProps) {
   if (!isOpen || !selectedTrain) return null
 
@@ -199,7 +202,11 @@ export function BookingPanel({
                 </div>
               </div>
               <Button 
-                onClick={onSeatSelection} 
+                onClick={() => {
+                  // 좌석 변경 시 좌석 정보 새로고침
+                  onRefreshSeats()
+                  onSeatSelection()
+                }} 
                 variant="outline" 
                 className="w-full h-10 text-base font-semibold"
               >

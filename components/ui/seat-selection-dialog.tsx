@@ -46,6 +46,8 @@ interface SeatSelectionDialogProps {
   loadingCars: boolean
   loadingSeats: boolean
   onCarSelect: (carId: string) => void
+  // 좌석 정보 새로고침 함수 추가
+  onRefreshSeats: () => void
 }
 
 export function SeatSelectionDialog({
@@ -63,6 +65,7 @@ export function SeatSelectionDialog({
   loadingCars,
   loadingSeats,
   onCarSelect,
+  onRefreshSeats,
 }: SeatSelectionDialogProps) {
   const [selectedCar, setSelectedCar] = useState<CarInfo | null>(null)
   const onCarSelectRef = useRef(onCarSelect)
@@ -86,8 +89,13 @@ export function SeatSelectionDialog({
       }) || carList[0]
       
       setSelectedCar(suitableCar)
+      
+      // 다이얼로그가 열릴 때만 좌석 정보 새로고침
+      if (isOpen) {
+        onRefreshSeats()
+      }
     }
-  }, [isOpen, carList, selectedSeatType])
+  }, [isOpen, carList, selectedSeatType]) // onRefreshSeats 제거
 
   // selectedCar가 변경될 때만 onCarSelect 호출
   useEffect(() => {

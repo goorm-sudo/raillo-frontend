@@ -736,6 +736,17 @@ export default function TrainSearchPage() {
     }
   }
 
+  // 좌석 정보 새로고침 함수
+  const handleRefreshSeats = () => {
+    if (selectedTrain && selectedTrain.trainScheduleId) {
+      // 현재 선택된 객차의 좌석 정보를 새로 가져오기
+      const currentCar = carList.find(car => parseInt(car.carNumber) === selectedCar)
+      if (currentCar) {
+        fetchSeats(currentCar.id.toString(), selectedTrain.trainScheduleId)
+      }
+    }
+  }
+
   const [hasNext, setHasNext] = useState(false)
 
   if (loading) {
@@ -835,6 +846,7 @@ export default function TrainSearchPage() {
             fetchSeats(carId, selectedTrain.trainScheduleId)
           }
         }}
+        onRefreshSeats={handleRefreshSeats}
       />
 
       {/* Booking Panel */}
@@ -859,6 +871,7 @@ export default function TrainSearchPage() {
         formatPrice={formatPrice}
         carList={carList}
         loadingCars={loadingCars}
+        onRefreshSeats={handleRefreshSeats}
       />
 
       <Footer />
