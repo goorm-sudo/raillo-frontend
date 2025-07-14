@@ -174,6 +174,16 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
           onClick={() => {
             if (isSelectable && isCurrentMonth) {
               setTempDate(new Date(currentDate))
+              // 오늘 날짜 선택 시 현재 시간으로, 다른 날짜 선택 시 00시로 설정
+              const now = new Date()
+              const isToday = currentDate.getDate() === now.getDate() && 
+                             currentDate.getMonth() === now.getMonth() && 
+                             currentDate.getFullYear() === now.getFullYear()
+              if (isToday) {
+                setSelectedHour(now.getHours().toString().padStart(2, '0') + '시')
+              } else {
+                setSelectedHour('00시')
+              }
             }
           }}
           disabled={!isSelectable || !isCurrentMonth}
@@ -314,6 +324,16 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
                   onClick={() => {
                     const prevMonth = new Date(tempDate.getFullYear(), tempDate.getMonth() - 1, 1)
                     setTempDate(prevMonth)
+                    // 월 변경 시 오늘 날짜면 현재 시간으로, 아니면 00시로 설정
+                    const now = new Date()
+                    const isToday = prevMonth.getDate() === now.getDate() && 
+                                   prevMonth.getMonth() === now.getMonth() && 
+                                   prevMonth.getFullYear() === now.getFullYear()
+                    if (isToday) {
+                      setSelectedHour(now.getHours().toString().padStart(2, '0') + '시')
+                    } else {
+                      setSelectedHour('00시')
+                    }
                   }}
                   disabled={tempDate.getMonth() === today.getMonth() && tempDate.getFullYear() === today.getFullYear()}
                 >
@@ -332,6 +352,16 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
                   onClick={() => {
                     const nextMonth = new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 1)
                     setTempDate(nextMonth)
+                    // 월 변경 시 오늘 날짜면 현재 시간으로, 아니면 00시로 설정
+                    const now = new Date()
+                    const isToday = nextMonth.getDate() === now.getDate() && 
+                                   nextMonth.getMonth() === now.getMonth() && 
+                                   nextMonth.getFullYear() === now.getFullYear()
+                    if (isToday) {
+                      setSelectedHour(now.getHours().toString().padStart(2, '0') + '시')
+                    } else {
+                      setSelectedHour('00시')
+                    }
                   }}
                   disabled={isBefore(maxAvailableDate, new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 1))}
                 >
