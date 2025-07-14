@@ -203,8 +203,7 @@ export function BookingPanel({
               </div>
               <Button 
                 onClick={() => {
-                  // 좌석 변경 시 좌석 정보 새로고침
-                  onRefreshSeats()
+                  // 좌석 선택 다이얼로그 열기
                   onSeatSelection()
                 }} 
                 variant="outline" 

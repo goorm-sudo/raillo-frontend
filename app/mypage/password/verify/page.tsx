@@ -21,9 +21,11 @@ import {
   ChevronUp,
 } from "lucide-react"
 import { useState } from "react"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function PasswordVerifyPage() {
   const router = useRouter()
+  const { isChecking, isAuthenticated } = useAuth()
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     ticketInfo: false,
     membershipPerformance: false,
@@ -41,6 +43,23 @@ export default function PasswordVerifyPage() {
   const handleVerification = (method: string) => {
     // 실제로는 인증 프로세스를 거치지만, 여기서는 바로 비밀번호 변경 페이지로 이동
     router.push("/mypage/password/change")
+  }
+
+  // 로딩 중이거나 인증 확인 중일 때
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">페이지를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 로그인되지 않은 경우
+  if (!isAuthenticated) {
+    return null
   }
 
   return (
