@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Train, ChevronLeft, ArrowRight, AlertTriangle, ChevronDown, CreditCard, Lock, Calendar, MapPin, Clock, User } from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
+import { useAuth } from '@/hooks/use-auth'
 
 interface PaymentInfo {
   trainType: string
@@ -35,6 +36,7 @@ interface PaymentInfo {
 
 export default function PaymentPage() {
   const router = useRouter()
+  const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/ticket/payment' })
   const [paymentMethod, setPaymentMethod] = useState("simple")
   const [simplePaymentType, setSimplePaymentType] = useState("간편현금결제")
   const [cardType, setCardType] = useState("personal")
@@ -55,6 +57,8 @@ export default function PaymentPage() {
   const [agreeSavePayment, setAgreeSavePayment] = useState(false)
   const [agreePersonalInfo, setAgreePersonalInfo] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+
+
 
   // 예약 정보 (실제로는 props나 상태에서 가져옴)
   const paymentInfo: PaymentInfo = {
@@ -89,6 +93,25 @@ export default function PaymentPage() {
 
   const formatPrice = (price: number) => {
     return price.toLocaleString() + "원"
+  }
+
+  // 로그인 상태 확인 중
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 상태를 확인하고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  // 로그인되지 않은 경우 (리다이렉트 중)
+  if (!isAuthenticated) {
+    return null
   }
 
   const handlePayment = async () => {
@@ -321,7 +344,7 @@ export default function PaymentPage() {
                       <Checkbox
                         id="requestReceipt"
                         checked={requestReceipt}
-                        onCheckedChange={setRequestReceipt}
+                        onCheckedChange={(checked) => setRequestReceipt(checked === true)}
                         className="data-[state=checked]:bg-blue-600"
                       />
                       <UILabel htmlFor="requestReceipt">현금영수증 신청</UILabel>

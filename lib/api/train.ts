@@ -12,6 +12,7 @@ export interface SeatInfo {
 
 // 열차 정보 타입
 export interface TrainSchedule {
+  trainScheduleId: number; // 추가
   trainNumber: string;
   trainName: string;
   departureStationName: string;
@@ -140,9 +141,7 @@ export const STATIONS: Station[] = [
   { id: 74, name: '살미' },
   { id: 75, name: '수안보온천' },
   { id: 76, name: '연풍' },
-  { id: 77, name: '문경' },
-  { id: 78, name: '진부' },
-  { id: 79, name: '구레구' }
+  { id: 77, name: '문경' }
 ];
 
 // 역 정보 유틸리티 함수
@@ -172,6 +171,75 @@ export const stationUtils = {
   }
 };
 
+// 운행 캘린더 정보 타입
+export interface CalendarInfo {
+  operationDate: string;
+  dayOfWeek: string;
+  businessDayType: 'WEEKDAY' | 'WEEKEND';
+  isHoliday: 'Y' | 'N';
+  isBookingAvailable: 'Y' | 'N';
+}
+
+// 운행 캘린더 응답 타입
+export interface CalendarResponse {
+  content: CalendarInfo[];
+}
+
+// 객차 정보 타입
+export interface CarInfo {
+  id: number;
+  carNumber: string;
+  carType: 'STANDARD' | 'FIRST_CLASS';
+  totalSeats: number;
+  remainingSeats: number;
+  seatArrangement: string;
+}
+
+// 객차 조회 응답 타입
+export interface CarSearchResponse {
+  recommendedCarNumber: string;
+  totalCarCount: number;
+  trainClassificationCode: string;
+  trainNumber: string;
+  carInfos: CarInfo[];
+}
+
+// 객차 조회 요청 타입
+export interface CarSearchRequest {
+  trainScheduleId: number;
+  departureStationId: number;
+  arrivalStationId: number;
+  passengerCount: number;
+}
+
+// 좌석 정보 타입
+export interface SeatDetail {
+  seatId: number;
+  seatNumber: string;
+  isAvailable: boolean;
+  seatDirection: 'FORWARD' | 'BACKWARD';
+  seatType: 'WINDOW' | 'AISLE';
+  remarks: string;
+}
+
+// 좌석 조회 응답 타입
+export interface SeatSearchResponse {
+  carNumber: string;
+  carType: string;
+  totalSeatCount: number;
+  remainingSeatCount: number;
+  layoutType: number;
+  seatList: SeatDetail[];
+}
+
+// 좌석 조회 요청 타입
+export interface SeatSearchRequest {
+  trainCarId: string;
+  trainScheduleId: number;
+  departureStationId: number;
+  arrivalStationId: number;
+}
+
 // 열차 관련 API
 export const trainAPI = {
   // 열차 조회
@@ -183,32 +251,26 @@ export const trainAPI = {
     const params = new URLSearchParams({ page: String(page), size: String(size) }).toString();
     return api.post<TrainSearchResponse>(`/api/v1/trains/search?${params}`, request);
   },
+
+  // 운행 캘린더 조회
+  getCalendar: async (): Promise<ApiResponse<CalendarInfo[]>> => {
+    return api.get<CalendarInfo[]>('/api/v1/trains/calendar');
+  },
+
+  // 객차 조회
+  searchCars: async (request: CarSearchRequest): Promise<ApiResponse<CarSearchResponse>> => {
+    return api.post<CarSearchResponse>('/api/v1/trains/cars', request);
+  },
+
+  // 좌석 조회
+  searchSeats: async (request: SeatSearchRequest): Promise<ApiResponse<SeatSearchResponse>> => {
+    return api.post<SeatSearchResponse>('/api/v1/trains/seats', request);
+  },
 };
 
 // 기존 호환성을 위한 export
 export const searchTrains = trainAPI.searchTrains;
+export const searchCars = trainAPI.searchCars;
+export const searchSeats = trainAPI.searchSeats;
 
-// 예약 요청 타입
-export interface ReservationRequest {
-  trainScheduleId: number;
-  seatId: number;
-  memberId?: number; // 비회원이면 undefined
-  departureStationId: number;
-  arrivalStationId: number;
-  passengerSummary: {
-    adult: number;
-    child: number;
-    senior: number;
-  };
-  tripType: "OW";
-}
-
-// 예약 요청 함수
-export const makeReservation = async (request: ReservationRequest) => {
-  return api.post("/api/v1/booking/reservation", request);
-};
-
-// 예약 취소 함수 (body에 reservationId를 JSON으로 보냄)
-export const deleteReservation = async (reservationId: number) => {
-  return api.delete('/api/v1/booking/reservation', { reservationId });
-}; 
+ 

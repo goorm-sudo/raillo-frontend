@@ -24,7 +24,10 @@ interface SearchData {
   arrivalStation: string
   departureDate: string
   departureHour: string
+  returnDate?: string
+  returnHour?: string
   passengers: PassengerCounts
+  tripType?: string
 }
 
 interface SearchFormProps {
@@ -32,13 +35,16 @@ interface SearchFormProps {
   departureStation: string
   arrivalStation: string
   date: Date | undefined
+  returnDate?: Date | undefined
   passengerCounts: PassengerCounts
   searchConditionsChanged: boolean
   onDepartureStationChange: (station: string) => void
   onArrivalStationChange: (station: string) => void
   onDateChange: (date: Date) => void
+  onReturnDateChange?: (date: Date) => void
   onPassengerChange: (passengers: PassengerCounts) => void
   onSearch: () => void
+  onBothStationsChange?: (departure: string, arrival: string) => void
 }
 
 export function SearchForm({
@@ -46,14 +52,19 @@ export function SearchForm({
   departureStation,
   arrivalStation,
   date,
+  returnDate,
   passengerCounts,
   searchConditionsChanged,
   onDepartureStationChange,
   onArrivalStationChange,
   onDateChange,
+  onReturnDateChange,
   onPassengerChange,
   onSearch,
+  onBothStationsChange,
 }: SearchFormProps) {
+  const isRoundtrip = searchData?.tripType === 'roundtrip'
+  
   return (
     <Card className="mb-6">
       <CardContent className="p-6">
@@ -66,6 +77,11 @@ export function SearchForm({
                 onValueChange={onDepartureStationChange}
                 placeholder="출발역 선택"
                 label=""
+                otherStation={searchData?.arrivalStation || arrivalStation}
+                onBothStationsChange={onBothStationsChange || ((departure, arrival) => {
+                  onDepartureStationChange(departure)
+                  onArrivalStationChange(arrival)
+                })}
               />
             </div>
 
@@ -78,29 +94,80 @@ export function SearchForm({
                 onValueChange={onArrivalStationChange}
                 placeholder="도착역 선택"
                 label=""
+                otherStation={searchData?.departureStation || departureStation}
+                onBothStationsChange={onBothStationsChange || ((departure, arrival) => {
+                  onDepartureStationChange(departure)
+                  onArrivalStationChange(arrival)
+                })}
               />
             </div>
 
             <Separator orientation="vertical" className="hidden md:block h-6" />
 
             {/* Date Selection */}
-            <div className="flex items-center">
-              <DateTimeSelector
-                value={
-                  searchData?.departureDate 
-                    ? (() => {
-                        const dateWithTime = new Date(searchData.departureDate)
-                        if (searchData.departureHour) {
-                          dateWithTime.setHours(parseInt(searchData.departureHour), 0, 0, 0)
-                        }
-                        return dateWithTime
-                      })()
-                    : date
-                }
-                onValueChange={onDateChange}
-                placeholder="날짜 선택"
-                label=""
-              />
+            <div className="flex items-center space-x-2">
+              {isRoundtrip ? (
+                <>
+                  {/* 가는 날짜 */}
+                  <div className="flex items-center">
+                    <span className="text-sm text-gray-600 mr-2 flex items-center h-full">가는 날</span>
+                    <DateTimeSelector
+                      value={
+                        searchData?.departureDate 
+                          ? (() => {
+                              const dateWithTime = new Date(searchData.departureDate)
+                              if (searchData.departureHour) {
+                                dateWithTime.setHours(parseInt(searchData.departureHour), 0, 0, 0)
+                              }
+                              return dateWithTime
+                            })()
+                          : date
+                      }
+                      onValueChange={onDateChange}
+                      placeholder="가는 날짜 선택"
+                      label=""
+                    />
+                  </div>
+                  
+                  {/* 오는 날짜 */}
+                  <div className="flex items-center">
+                    <span className="text-sm text-gray-600 mr-2 flex items-center h-full">오는 날</span>
+                    <DateTimeSelector
+                      value={
+                        searchData?.returnDate 
+                          ? (() => {
+                              const dateWithTime = new Date(searchData.returnDate)
+                              if (searchData.returnHour) {
+                                dateWithTime.setHours(parseInt(searchData.returnHour), 0, 0, 0)
+                              }
+                              return dateWithTime
+                            })()
+                          : returnDate
+                      }
+                      onValueChange={onReturnDateChange || onDateChange}
+                      placeholder="오는 날짜 선택"
+                      label=""
+                    />
+                  </div>
+                </>
+              ) : (
+                <DateTimeSelector
+                  value={
+                    searchData?.departureDate 
+                      ? (() => {
+                          const dateWithTime = new Date(searchData.departureDate)
+                          if (searchData.departureHour) {
+                            dateWithTime.setHours(parseInt(searchData.departureHour), 0, 0, 0)
+                          }
+                          return dateWithTime
+                        })()
+                      : date
+                  }
+                  onValueChange={onDateChange}
+                  placeholder="날짜 선택"
+                  label=""
+                />
+              )}
             </div>
 
             <Separator orientation="vertical" className="hidden md:block h-6" />

@@ -5,21 +5,20 @@ import {useState} from "react"
 import {useRouter} from "next/navigation"
 import {Button} from "@/components/ui/button"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
-import {Badge} from "@/components/ui/badge"
 import {
   ArrowLeftRight,
   CalendarIcon,
-  Clock,
   CreditCard,
-  MapPin,
   RotateCcw,
   Search,
   Ticket,
   User,
   X,
+  Train,
+  MapPin,
+  Clock,
 } from "lucide-react"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
+import PageLayout from "@/components/layout/PageLayout"
 import {StationSelector} from "@/components/ui/station-selector"
 import {DateTimeSelector} from "@/components/ui/date-time-selector"
 import {PassengerSelector} from "@/components/ui/passenger-selector"
@@ -60,6 +59,37 @@ export default function HomePage() {
       return
     }
 
+    // 검색 기록 저장
+    const searchHistory = {
+      departure: departureStation,
+      arrival: arrivalStation,
+      timestamp: Date.now()
+    }
+    
+    const existingHistory = localStorage.getItem('rail-o-search-history')
+    let history = []
+    
+    if (existingHistory) {
+      try {
+        history = JSON.parse(existingHistory)
+      } catch (error) {
+        console.error('기존 검색 기록 파싱 실패:', error)
+      }
+    }
+
+    // 중복 제거
+    history = history.filter((item: any) => 
+      !(item.departure === departureStation && item.arrival === arrivalStation)
+    )
+
+    // 새 기록을 맨 앞에 추가
+    history.unshift(searchHistory)
+
+    // 최대 5개까지만 저장
+    history = history.slice(0, 5)
+
+    localStorage.setItem('rail-o-search-history', JSON.stringify(history))
+
     // 검색 조건을 localStorage에 저장하여 새로고침 시에도 유지
     const searchData = {
       departureStation,
@@ -99,10 +129,13 @@ export default function HomePage() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <Header />
+  const handleBothStationsChange = (departure: string, arrival: string) => {
+    setDepartureStation(departure)
+    setArrivalStation(arrival)
+  }
 
+  return (
+    <PageLayout>
       {/* Sidebar Overlay */}
       {showSidebar && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowSidebar(false)}>
@@ -146,14 +179,6 @@ export default function HomePage() {
                   </Link>
 
                   <Link
-                    href="/ticket/regular"
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <CalendarIcon className="h-5 w-5 text-purple-600" />
-                    <span className="text-gray-700">정기 승차권</span>
-                  </Link>
-
-                  <Link
                     href="/ticket/reservations"
                     className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
                   >
@@ -189,25 +214,45 @@ export default function HomePage() {
       )}
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        {/* Welcome Section */}
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">안전하고 편리한 철도여행</h2>
-          <p className="text-lg text-gray-600 mb-8">RAIL-O와 함께하는 스마트한 기차여행을 시작하세요</p>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <div className="container mx-auto px-4 py-8">
+          {/* Hero Section with reduced spacing */}
+          <div className="text-center mb-12">
+            <div className="mb-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mb-4 shadow-lg">
+                <Train className="h-8 w-8 text-white" />
+              </div>
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">
+              안전하고 편리한
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
+                철도여행
+              </span>
+            </h1>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
+              RAIL-O와 함께하는 스마트한 기차여행을 시작하세요
+            </p>
+          </div>
 
-        {/* Ticket Booking Form */}
-        <Card className="mb-8 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-          <CardContent className="p-6">
-            {/* 한 줄 예매 폼 */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
-              {/* 출발역 */}
+          {/* Ticket Booking Form with enhanced design */}
+          <Card className="mb-16 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white shadow-2xl border-0">
+            <CardContent className="p-8">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold mb-2">열차 예매</h2>
+                <p className="text-blue-100">원하는 조건으로 열차를 검색하고 예매하세요</p>
+              </div>
+              
+              {/* 한 줄 예매 폼 */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+                              {/* 출발역 */}
               <div className="lg:col-span-2">
                 <StationSelector
                   value={departureStation}
                   onValueChange={handleDepartureStationChange}
                   placeholder="출발역 선택"
                   label="출발역"
+                  otherStation={arrivalStation}
+                  onBothStationsChange={handleBothStationsChange}
                 />
               </div>
 
@@ -218,9 +263,9 @@ export default function HomePage() {
                   variant="ghost"
                   size="sm"
                   onClick={swapStations}
-                  className="text-white hover:bg-blue-500 p-2 h-10"
+                  className="text-white hover:bg-white hover:bg-opacity-20 p-3 h-12 w-12 rounded-full transition-all duration-200"
                 >
-                  <ArrowLeftRight className="h-4 w-4" />
+                  <ArrowLeftRight className="h-5 w-5" />
                 </Button>
               </div>
 
@@ -231,159 +276,146 @@ export default function HomePage() {
                   onValueChange={handleArrivalStationChange}
                   placeholder="도착역 선택"
                   label="도착역"
+                  otherStation={departureStation}
+                  onBothStationsChange={handleBothStationsChange}
                 />
               </div>
 
-              {/* 출발일 */}
-              <div className="lg:col-span-2">
-                <DateTimeSelector
-                  value={departureDate}
-                  onValueChange={(date) => {
-                    setDepartureDate(date)
-                  }}
-                  placeholder="날짜 선택"
-                  label="출발일"
-                />
-              </div>
+                {/* 출발일 */}
+                <div className="lg:col-span-2">
+                  <DateTimeSelector
+                    value={departureDate}
+                    onValueChange={(date) => {
+                      setDepartureDate(date)
+                    }}
+                    placeholder="날짜 선택"
+                    label="출발일"
+                  />
+                </div>
 
-              {/* 인원 */}
-              <div className="lg:col-span-2">
-                <PassengerSelector
-                  value={passengers}
-                  onValueChange={setPassengers}
-                  placeholder="인원 선택"
-                  label="인원"
-                  simple={false}
-                />
-              </div>
+                {/* 인원 */}
+                <div className="lg:col-span-2">
+                  <PassengerSelector
+                    value={passengers}
+                    onValueChange={setPassengers}
+                    placeholder="인원 선택"
+                    label="인원"
+                    simple={false}
+                  />
+                </div>
 
-              {/* 검색 버튼 */}
-              <div className="lg:col-span-3">
-                <Button
-                  size="lg"
-                  onClick={handleSearch}
-                  className="w-full bg-white text-blue-600 hover:bg-blue-50 font-semibold h-10"
-                >
-                  <Search className="mr-2 h-4 w-4" />
-                  열차 조회하기
-                </Button>
+                {/* 검색 버튼 */}
+                <div className="lg:col-span-3">
+                  <Button
+                    size="lg"
+                    onClick={handleSearch}
+                    className="w-full bg-white text-blue-600 hover:bg-blue-50 font-semibold h-12 text-lg shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <Search className="mr-3 h-5 w-5" />
+                    열차 조회하기
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Service Grid with improved spacing and design */}
+          <div className="mb-16">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">주요 서비스</h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                RAIL-O에서 제공하는 다양한 서비스를 이용해보세요
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* 승차권 확인 */}
+              <Link href="/ticket/purchased">
+                <Card className="group hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-green-200 bg-white/80 backdrop-blur-sm">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl group-hover:scale-110 transition-transform duration-200">
+                        <CreditCard className="h-7 w-7 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-xl text-gray-900">승차권 확인</CardTitle>
+                        <CardDescription className="text-gray-600">예매한 승차권 정보를 확인하세요</CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Button variant="outline" className="w-full group-hover:bg-green-50 group-hover:border-green-300 group-hover:text-green-700 transition-all duration-200 font-medium">
+                      확인하기
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Link>
+
+              {/* 예약 승차권 조회 및 취소 */}
+              <Link href="/ticket/reservations">
+                <Card className="group hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-orange-200 bg-white/80 backdrop-blur-sm">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl group-hover:scale-110 transition-transform duration-200">
+                        <CalendarIcon className="h-7 w-7 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-xl text-gray-900">예약승차권 조회</CardTitle>
+                        <CardDescription className="text-gray-600">예약한 승차권을 조회하고 취소할 수 있습니다</CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Button variant="outline" className="w-full group-hover:bg-orange-50 group-hover:border-orange-300 group-hover:text-orange-700 transition-all duration-200 font-medium">
+                      조회하기
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Link>
+
+              {/* 열차 조회 */}
+              <Link href="/ticket/booking">
+                <Card className="group hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-purple-200 bg-white/80 backdrop-blur-sm">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl group-hover:scale-110 transition-transform duration-200">
+                        <Search className="h-7 w-7 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-xl text-gray-900">승차권 예매</CardTitle>
+                        <CardDescription className="text-gray-600">원하는 열차를 검색하고 예매하세요</CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Button variant="outline" className="w-full group-hover:bg-purple-50 group-hover:border-purple-300 group-hover:text-purple-700 transition-all duration-200 font-medium">
+                      예매하기
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Link>
+            </div>
+          </div>
+
+          {/* Additional Features Section */}
+          <div className="text-center">
+            <div className="inline-flex items-center space-x-8 text-gray-400">
+              <div className="flex items-center space-x-2">
+                <Clock className="h-5 w-5" />
+                <span className="text-sm">24시간 운영</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <MapPin className="h-5 w-5" />
+                <span className="text-sm">전국 역 연결</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Train className="h-5 w-5" />
+                <span className="text-sm">안전한 여행</span>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Service Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {/* 승차권 확인 */}
-          <Link href="/ticket/purchased">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <CreditCard className="h-5 w-5 text-green-600" />
-                  <span>승차권 확인</span>
-                </CardTitle>
-                <CardDescription>예매한 승차권 정보를 확인하세요</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full">
-                  확인하기
-                </Button>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* 예약 승차권 조회 및 취소 */}
-          <Link href="/ticket/reservations">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <CalendarIcon className="h-5 w-5 text-orange-600" />
-                  <span>예약승차권 조회</span>
-                </CardTitle>
-                <CardDescription>예약한 승차권을 조회하고 취소할 수 있습니다</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full">
-                  조회하기
-                </Button>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* 열차 조회 */}
-          <Link href="/ticket/booking">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Search className="h-5 w-5 text-purple-600" />
-                  <span>승차권 예매</span>
-                </CardTitle>
-                <CardDescription>원하는 열차를 검색하고 예매하세요</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full">
-                  예매하기
-                </Button>
-              </CardContent>
-            </Card>
-          </Link>
+          </div>
         </div>
-
-        {/* Quick Info Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="p-6 text-center">
-              <Clock className="h-8 w-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">실시간 운행정보</h3>
-              <p className="text-sm text-gray-600">열차 지연 및 운행 상황을 실시간으로 확인</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-green-50 border-green-200">
-            <CardContent className="p-6 text-center">
-              <MapPin className="h-8 w-8 text-green-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">역 정보</h3>
-              <p className="text-sm text-gray-600">전국 기차역 위치 및 편의시설 안내</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-purple-50 border-purple-200">
-            <CardContent className="p-6 text-center">
-              <Ticket className="h-8 w-8 text-purple-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">할인혜택</h3>
-              <p className="text-sm text-gray-600">다양한 할인 혜택과 이벤트 정보</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Notice Section */}
-        <Card className="bg-yellow-50 border-yellow-200">
-          <CardHeader>
-            <CardTitle className="text-lg text-yellow-800">공지사항</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Badge variant="secondary">공지</Badge>
-                <span className="text-sm">2024년 설날 연휴 열차 운행 안내</span>
-                <span className="text-xs text-gray-500 ml-auto">2024.01.15</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Badge variant="secondary">이벤트</Badge>
-                <span className="text-sm">겨울 여행 할인 이벤트 진행 중</span>
-                <span className="text-xs text-gray-500 ml-auto">2024.01.10</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Badge variant="secondary">안내</Badge>
-                <span className="text-sm">모바일 앱 업데이트 안내</span>
-                <span className="text-xs text-gray-500 ml-auto">2024.01.08</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </main>
-
-      <Footer />
-    </div>
+      </div>
+    </PageLayout>
   )
 }

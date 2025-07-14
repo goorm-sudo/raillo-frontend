@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { Search, MapPin, X } from "lucide-react"
+import { Search, MapPin, X, Clock, ArrowRight } from "lucide-react"
 import { STATIONS, stationUtils, Station } from "@/lib/api/train"
 
 interface StationSelectorProps {
@@ -13,12 +13,47 @@ interface StationSelectorProps {
   placeholder: string
   label: string
   variant?: "blue" | "white"
+  otherStation?: string // 다른 역 (출발역이면 도착역, 도착역이면 출발역)
+  onBothStationsChange?: (departure: string, arrival: string) => void // 두 역을 동시에 변경할 때
+  disabled?: boolean // 비활성화 여부
 }
 
-export function StationSelector({ value, onValueChange, placeholder, label, variant = "blue" }: StationSelectorProps) {
+interface SearchHistory {
+  departure: string
+  arrival: string
+  timestamp: number
+}
+
+const SEARCH_HISTORY_KEY = "rail-o-search-history"
+const MAX_HISTORY_ITEMS = 3
+
+export function StationSelector({ 
+  value, 
+  onValueChange, 
+  placeholder, 
+  label, 
+  variant = "blue",
+  otherStation = "",
+  onBothStationsChange,
+  disabled
+}: StationSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [filteredStations, setFilteredStations] = useState<Station[]>(STATIONS)
+  const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([])
+
+  // 검색 기록 로드
+  useEffect(() => {
+    const savedHistory = localStorage.getItem(SEARCH_HISTORY_KEY)
+    if (savedHistory) {
+      try {
+        const history = JSON.parse(savedHistory) as SearchHistory[]
+        setSearchHistory(history.slice(0, MAX_HISTORY_ITEMS))
+      } catch (error) {
+        console.error('검색 기록 로드 실패:', error)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (searchTerm.trim() === "") {
@@ -31,6 +66,18 @@ export function StationSelector({ value, onValueChange, placeholder, label, vari
 
   const handleStationSelect = (station: Station) => {
     onValueChange(station.name)
+    setIsOpen(false)
+    setSearchTerm("")
+  }
+
+  const handleHistorySelect = (history: SearchHistory) => {
+    if (onBothStationsChange) {
+      // 두 역을 동시에 변경
+      onBothStationsChange(history.departure, history.arrival)
+    } else {
+      // 현재 선택하는 역만 변경
+      onValueChange(label === "출발역" ? history.departure : history.arrival)
+    }
     setIsOpen(false)
     setSearchTerm("")
   }
@@ -48,6 +95,7 @@ export function StationSelector({ value, onValueChange, placeholder, label, vari
           variant="outline"
           className="w-full justify-start text-left font-normal bg-white text-gray-900 hover:bg-gray-50"
           onClick={() => setIsOpen(true)}
+          disabled={disabled}
         >
           <MapPin className="mr-2 h-4 w-4" />
           {value || placeholder}
@@ -82,6 +130,27 @@ export function StationSelector({ value, onValueChange, placeholder, label, vari
                 autoFocus
               />
             </div>
+
+            {/* 최근 검색 기록 */}
+            {searchHistory.length > 0 && (
+              <div className="mb-4">
+                <div className="space-y-2">
+                  {searchHistory.map((history, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleHistorySelect(history)}
+                      className="w-full text-left p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-200"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-blue-900">{history.departure}</span>
+                        <ArrowRight className="h-3 w-3 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-900">{history.arrival}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 역 목록 */}
             <div className="h-[400px] overflow-y-auto">

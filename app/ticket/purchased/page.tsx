@@ -2,10 +2,11 @@
 
 import Link from "next/link"
 import { useState } from "react"
+import { useAuth } from '@/hooks/use-auth'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 import { Train, ChevronLeft, MapPin, ArrowRight, Download, QrCode, Calendar, User, Clock, Printer, CreditCard } from "lucide-react"
@@ -31,7 +32,7 @@ interface PurchasedTicket {
 }
 
 export default function PurchasedTicketsPage() {
-  const [activeTab, setActiveTab] = useState("tickets")
+  const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/ticket/purchased' })
 
   // 구매한 승차권 목록
   const [tickets] = useState<PurchasedTicket[]>([
@@ -93,6 +94,20 @@ export default function PurchasedTicketsPage() {
     alert("QR 코드를 표시합니다.")
   }
 
+  // 로그인 상태 확인 중이거나 인증되지 않은 경우 로딩 표시
+  if (isChecking || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">인증을 확인하고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <Header />
@@ -105,21 +120,13 @@ export default function PurchasedTicketsPage() {
             <h2 className="text-3xl font-bold text-gray-900 mb-2">승차권 확인</h2>
           </div>
 
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6 h-12">
-              <TabsTrigger
-                value="tickets"
-                className="text-base data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:border-b-2 data-[state=active]:border-blue-600"
-              >
-                승차권
-              </TabsTrigger>
-              <TabsTrigger value="passes" className="text-base data-[state=inactive]:text-gray-600">
-                정기권·패스
-              </TabsTrigger>
-            </TabsList>
+          {/* Content */}
+          <div className="w-full">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">승차권</h2>
+            </div>
 
-            <TabsContent value="tickets" className="space-y-6">
+            <div className="space-y-6">
               {/* Info Message */}
               <Card className="bg-gray-50 border-gray-200">
                 <CardContent className="p-4">
@@ -262,48 +269,9 @@ export default function PurchasedTicketsPage() {
                   </Card>
                 ))
               )}
-            </TabsContent>
+            </div>
 
-            <TabsContent value="passes" className="space-y-6">
-              {/* Info Message */}
-              <Card className="bg-gray-50 border-gray-200">
-                <CardContent className="p-4">
-                  <p className="text-sm text-gray-700">
-                    정기권 및 패스 상품을 확인하시려면{" "}
-                    <Link href="/ticket/booking" className="text-blue-600 hover:underline">
-                      여기
-                    </Link>
-                    를 클릭하세요.
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Empty State for Passes */}
-              <Card className="border-gray-200">
-                <CardContent className="p-16 text-center">
-                  {/* Pass Icon */}
-                  <div className="mx-auto mb-6 w-24 h-16 relative">
-                    <svg
-                      viewBox="0 0 100 60"
-                      className="w-full h-full text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      {/* Card outline */}
-                      <rect x="10" y="15" width="80" height="30" rx="4" fill="none" stroke="currentColor" />
-                      {/* Magnetic stripe */}
-                      <rect x="15" y="20" width="70" height="4" fill="currentColor" />
-                      {/* Text lines */}
-                      <line x1="15" y1="30" x2="45" y2="30" stroke="currentColor" strokeWidth="1" />
-                      <line x1="15" y1="35" x2="35" y2="35" stroke="currentColor" strokeWidth="1" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">발권하신 정기권·패스가 없습니다.</h3>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+          </div>
         </div>
       </main>
 

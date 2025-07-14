@@ -1,162 +1,134 @@
 "use client"
 
 import Link from "next/link"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Train, Home, Printer, User } from "lucide-react"
+import { User, CheckCircle, ArrowLeft } from "lucide-react"
+import { useRouter } from "next/navigation"
+import PageLayout from "@/components/layout/PageLayout"
 
 export default function FindAccountResultPage() {
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <Train className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
-            </Link>
-            <nav className="hidden md:flex items-center space-x-6">
-              <Link href="/login" className="text-gray-600 hover:text-blue-600">
-                로그인
-              </Link>
-              <Link href="/" className="text-gray-600 hover:text-blue-600">
-                홈으로
-              </Link>
-            </nav>
+  const [memberNo, setMemberNo] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
+
+  useEffect(() => {
+    // sessionStorage에서 회원번호 가져오기
+    const memberNoFromStorage = sessionStorage.getItem('foundMemberNo')
+    
+    if (memberNoFromStorage) {
+      setMemberNo(memberNoFromStorage)
+      setIsLoading(false)
+      // 상태가 업데이트된 후 sessionStorage에서 삭제
+      setTimeout(() => {
+        sessionStorage.removeItem('foundMemberNo')
+      }, 100)
+    } else {
+      // sessionStorage에 회원번호가 없으면 이전 페이지로 리다이렉트
+      router.push('/find-account')
+    }
+  }, [router])
+
+  const handleLogin = () => {
+    // 회원번호를 sessionStorage에 저장하여 로그인 페이지에서 사용할 수 있도록 함
+    sessionStorage.setItem('foundMemberNo', memberNo)
+    router.push('/login')
+  }
+
+  const handleFindPassword = () => {
+    // 회원번호를 sessionStorage에 저장하여 비밀번호 찾기에서 사용할 수 있도록 함
+    sessionStorage.setItem('foundMemberNo', memberNo)
+    router.push('/find-account')
+  }
+
+  if (isLoading) {
+    return (
+      <PageLayout>
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">결과를 불러오는 중...</p>
           </div>
         </div>
-      </header>
+      </PageLayout>
+    )
+  }
 
-      {/* Page Header */}
-      <div className="bg-blue-500 text-white py-6">
-        <div className="container mx-auto px-4">
-          <h1 className="text-2xl font-bold text-center">회원번호 찾기 결과</h1>
-        </div>
-      </div>
-
-      {/* Breadcrumb */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Home className="h-4 w-4" />
-              <Link href="/" className="hover:text-blue-600">
-                홈
-              </Link>
-              <span>/</span>
-              <Link href="/find-account" className="hover:text-blue-600">
-                회원번호/비밀번호 찾기
-              </Link>
-              <span>/</span>
-              <span className="text-gray-900">회원번호 찾기 결과</span>
-            </div>
-            <Button variant="outline" size="sm" className="flex items-center space-x-1">
-              <Printer className="h-4 w-4" />
-              <span>인쇄</span>
+  return (
+    <PageLayout>
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          {/* 뒤로가기 버튼 */}
+          <div className="mb-6">
+            <Button
+              variant="ghost"
+              onClick={() => router.push('/find-account')}
+              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>뒤로가기</span>
             </Button>
           </div>
-        </div>
-      </div>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
-        <div className="max-w-2xl mx-auto">
           <Card className="bg-white shadow-lg">
-            <CardContent className="p-12 text-center">
-              {/* Illustration */}
-              <div className="mb-8">
-                <div className="w-32 h-32 mx-auto mb-6 bg-blue-100 rounded-full flex items-center justify-center">
-                  <User className="h-16 w-16 text-blue-600" />
+            <CardContent className="p-8 text-center">
+              {/* Success Icon */}
+              <div className="mb-6">
+                <div className="w-20 h-20 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="h-10 w-10 text-green-600" />
                 </div>
               </div>
 
               {/* Success Message */}
               <div className="mb-8">
-                <h2 className="text-xl font-bold text-gray-900 mb-2">회원님의 RAIL-O</h2>
-                <p className="text-xl font-bold text-gray-900">회원번호 찾기 결과입니다.</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">회원번호 찾기 완료</h1>
+                <p className="text-gray-600">회원님의 RAIL-O 회원번호를 찾았습니다.</p>
               </div>
 
-              {/* Divider */}
-              <div className="w-16 h-1 bg-gray-300 mx-auto mb-8"></div>
-
               {/* Member Number */}
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">RAIL-O 회원번호</h3>
-                <div className="text-3xl font-bold text-red-500">1234567</div>
+              <div className="mb-8 p-6 bg-gray-50 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">RAIL-O 회원번호</h3>
+                <div className="text-2xl font-bold text-blue-600 font-mono">{memberNo}</div>
               </div>
 
               {/* Action Buttons */}
-              <div className="space-y-4">
-                <Link href="/login">
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 text-lg rounded-full">
-                    로그인하기
-                  </Button>
-                </Link>
-                <Link href="/find-account">
-                  <Button
-                    variant="outline"
-                    className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 font-semibold py-3 text-lg rounded-full"
-                  >
-                    비밀번호 찾기
-                  </Button>
-                </Link>
+              <div className="space-y-3">
+                <Button
+                  onClick={handleLogin}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3"
+                  size="lg"
+                >
+                  로그인하기
+                </Button>
+                <Button
+                  onClick={handleFindPassword}
+                  variant="outline"
+                  className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 font-semibold py-3"
+                  size="lg"
+                >
+                  비밀번호 찾기
+                </Button>
               </div>
 
               {/* Additional Info */}
-              <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">
-                  회원번호를 기억해 두시고, 로그인 시 사용해 주세요.
-                  <br />
-                  비밀번호를 잊으셨다면 비밀번호 찾기를 이용해 주세요.
-                </p>
+              <div className="mt-8 p-4 bg-blue-50 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <User className="h-5 w-5 text-blue-600 mt-1 flex-shrink-0" />
+                  <div className="text-left">
+                    <h3 className="font-semibold text-gray-900 mb-1">안내사항</h3>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      회원번호를 기억해 두시고, 로그인 시 사용해 주세요.
+                      <br />
+                      비밀번호를 잊으셨다면 비밀번호 찾기를 이용해 주세요.
+                    </p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8 mt-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="font-semibold mb-4">고객센터</h3>
-              <p className="text-sm text-gray-300">1544-7788</p>
-              <p className="text-sm text-gray-300">평일 05:30~23:30</p>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">빠른 링크</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    이용약관
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    개인정보처리방침
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    사이트맵
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">RAIL-O 소개</h3>
-              <p className="text-sm text-gray-300">
-                한국철도공사는 국민의 안전하고 편리한 철도여행을 위해 최선을 다하고 있습니다.
-              </p>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2024 RAIL-O. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
-    </div>
+      </div>
+    </PageLayout>
   )
 }

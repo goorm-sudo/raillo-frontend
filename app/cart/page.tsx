@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,67 +31,81 @@ import {
 } from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
+import { getCart, deleteReservation } from '@/lib/api/booking'
+import { handleError } from '@/lib/utils/errorHandler'
+import { useAuth } from '@/hooks/use-auth'
+import { format } from "date-fns"
+import { ko } from "date-fns/locale"
 
 interface CartItem {
-  id: string
-  trainType: string
+  reservationId: number
+  reservationCode: string
   trainNumber: string
-  date: string
-  departureStation: string
-  arrivalStation: string
+  trainName: string
+  departureStationName: string
+  arrivalStationName: string
   departureTime: string
   arrivalTime: string
-  seatClass: string
-  carNumber: number
-  seatNumber: string
-  price: number
-  reservationNumber: string
+  operationDate: string
+  expiresAt: string
+  seats: {
+    seatReservationId: number
+    passengerType: string
+    carNumber: number
+    carType: string
+    seatNumber: string
+    baseFare: number
+    fare: number
+  }[]
   selected: boolean
 }
 
 export default function CartPage() {
   const router = useRouter()
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: "1",
-      trainType: "ITX-새마을",
-      trainNumber: "1036",
-      date: "2025년 06월 02일(월)",
-      departureStation: "대구",
-      arrivalStation: "서울",
-      departureTime: "09:33",
-      arrivalTime: "13:14",
-      seatClass: "일반실",
-      carNumber: 3,
-      seatNumber: "8A",
-      price: 42400,
-      reservationNumber: "R2025060100001",
-      selected: true,
-    },
-    {
-      id: "2",
-      trainType: "KTX",
-      trainNumber: "101",
-      date: "2025년 06월 05일(목)",
-      departureStation: "서울",
-      arrivalStation: "부산",
-      departureTime: "06:00",
-      arrivalTime: "08:42",
-      seatClass: "일반실",
-      carNumber: 2,
-      seatNumber: "15B",
-      price: 59800,
-      reservationNumber: "R2025060100002",
-      selected: false,
-    },
-  ])
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/cart' })
+
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [itemToDelete, setItemToDelete] = useState<string | null>(null)
+  const [itemToDelete, setItemToDelete] = useState<number | null>(null)
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
 
-  const getTrainTypeColor = (trainType: string) => {
-    switch (trainType) {
+  // 장바구니 데이터 로드
+  useEffect(() => {
+    // 로그인 상태가 확인된 후에만 장바구니 데이터를 로드
+    if (isChecking || !isAuthenticated) return
+    
+    const fetchCart = async () => {
+      try {
+        setLoading(true)
+        const response = await getCart()
+        console.log('Cart response:', response)
+        if (response.result && Array.isArray(response.result)) {
+          const itemsWithSelection = (response.result as any[]).map((item: any) => ({
+            ...item,
+            selected: true // 기본적으로 모든 항목 선택
+          }))
+          setCartItems(itemsWithSelection)
+        } else {
+          setError('장바구니를 불러올 수 없습니다.')
+        }
+      } catch (err) {
+        const errorMessage = handleError(err, '장바구니 조회 중 오류가 발생했습니다.', false)
+        setError(errorMessage)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCart()
+  }, [isChecking, isAuthenticated])
+
+
+
+  const getTrainTypeColor = (trainName: string) => {
+    switch (trainName) {
       case "KTX":
         return "bg-blue-600 text-white"
       case "ITX-새마을":
@@ -109,8 +123,23 @@ export default function CartPage() {
     return price.toLocaleString() + "원"
   }
 
-  const toggleItemSelection = (id: string) => {
-    setCartItems((prev) => prev.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item)))
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return format(date, "yyyy년 MM월 dd일(EEEE)", { locale: ko })
+  }
+
+  const formatTime = (timeString: string) => {
+    return timeString.substring(0, 5) // "HH:mm" 형식으로 변환
+  }
+
+  const getTotalPrice = (item: CartItem) => {
+    return item.seats.reduce((total, seat) => total + seat.fare, 0)
+  }
+
+  const toggleItemSelection = (reservationId: number) => {
+    setCartItems((prev) => prev.map((item) => 
+      item.reservationId === reservationId ? { ...item, selected: !item.selected } : item
+    ))
   }
 
   const toggleAllSelection = () => {
@@ -118,15 +147,20 @@ export default function CartPage() {
     setCartItems((prev) => prev.map((item) => ({ ...item, selected: !allSelected })))
   }
 
-  const handleDeleteItem = (id: string) => {
-    setItemToDelete(id)
+  const handleDeleteItem = (reservationId: number) => {
+    setItemToDelete(reservationId)
     setShowDeleteDialog(true)
   }
 
-  const confirmDeleteItem = () => {
+  const confirmDeleteItem = async () => {
     if (itemToDelete) {
-      setCartItems((prev) => prev.filter((item) => item.id !== itemToDelete))
-      setItemToDelete(null)
+      try {
+        await deleteReservation(itemToDelete)
+        setCartItems((prev) => prev.filter((item) => item.reservationId !== itemToDelete))
+        setItemToDelete(null)
+      } catch (e: any) {
+        handleError(e, '장바구니에서 삭제 중 오류가 발생했습니다.')
+      }
     }
     setShowDeleteDialog(false)
   }
@@ -140,9 +174,16 @@ export default function CartPage() {
     setShowDeleteAllDialog(true)
   }
 
-  const confirmDeleteSelected = () => {
-    setCartItems((prev) => prev.filter((item) => !item.selected))
-    setShowDeleteAllDialog(false)
+  const confirmDeleteSelected = async () => {
+    try {
+      const selectedItems = cartItems.filter((item) => item.selected)
+      // 선택된 모든 항목을 병렬로 삭제
+      await Promise.all(selectedItems.map(item => deleteReservation(item.reservationId)))
+      setCartItems((prev) => prev.filter((item) => !item.selected))
+      setShowDeleteAllDialog(false)
+    } catch (e: any) {
+      handleError(e, '선택한 항목들을 삭제 중 오류가 발생했습니다.')
+    }
   }
 
   const handlePayment = () => {
@@ -155,15 +196,65 @@ export default function CartPage() {
   }
 
   const selectedItems = cartItems.filter((item) => item.selected)
-  const totalPrice = selectedItems.reduce((sum, item) => sum + item.price, 0)
+  const totalPrice = selectedItems.reduce((sum, item) => sum + getTotalPrice(item), 0)
   const allSelected = cartItems.length > 0 && cartItems.every((item) => item.selected)
 
+  // 로그인 상태 확인 중
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 상태를 확인하고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  // 로그인되지 않은 경우 (리다이렉트 중)
+  if (!isAuthenticated) {
+    return null
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">장바구니를 불러오고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
+          <div className="text-red-600 mb-4">
+            <p className="text-lg font-semibold">장바구니를 불러올 수 없습니다</p>
+            <p className="text-sm">{error}</p>
+          </div>
+          <Button onClick={() => router.push('/')} variant="outline">
+            홈으로 돌아가기
+          </Button>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
       <Header />
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-6xl mx-auto">
           {/* Page Title */}
           <div className="text-center mb-8">
@@ -178,7 +269,7 @@ export default function CartPage() {
                 <ShoppingCart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">장바구니가 비어있습니다</h3>
                 <p className="text-gray-600 mb-6">승차권을 예매하고 장바구니에 담아보세요.</p>
-                <Link href="/ticket/booking">
+                <Link href="/ticket/search">
                   <Button className="bg-blue-600 hover:bg-blue-700">승차권 예매하기</Button>
                 </Link>
               </CardContent>
@@ -210,29 +301,31 @@ export default function CartPage() {
                 </Card>
 
                 {/* Cart Items List */}
-                {cartItems.map((item) => (
-                  <Card key={item.id} className={`${item.selected ? "ring-2 ring-blue-500 bg-blue-50" : ""}`}>
+                {cartItems.map((item) => {
+                  const isExpired = new Date(item.expiresAt) < new Date();
+                  return (
+                    <Card key={item.reservationId} className={`${item.selected ? "ring-2 ring-blue-500 bg-blue-50" : ""} ${isExpired ? "ring-2 ring-red-500 bg-red-50" : ""}`}>
                     <CardContent className="p-6">
                       <div className="flex items-start space-x-4">
                         <Checkbox
                           checked={item.selected}
-                          onCheckedChange={() => toggleItemSelection(item.id)}
+                          onCheckedChange={() => toggleItemSelection(item.reservationId)}
                           className="mt-1 data-[state=checked]:bg-blue-600"
                         />
 
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center space-x-3">
-                              <Badge className={`${getTrainTypeColor(item.trainType)} px-3 py-1`}>
-                                {item.trainType}
+                              <Badge className={`${getTrainTypeColor(item.trainName)} px-3 py-1`}>
+                                {item.trainName}
                               </Badge>
                               <span className="text-lg font-bold">{item.trainNumber}</span>
-                              <span className="text-gray-600">{item.date}</span>
+                              <span className="text-gray-600">{formatDate(item.operationDate)}</span>
                             </div>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDeleteItem(item.id)}
+                              onClick={() => handleDeleteItem(item.reservationId)}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -248,12 +341,12 @@ export default function CartPage() {
                               </h4>
                               <div className="space-y-1">
                                 <div className="flex items-center space-x-2">
-                                  <span className="font-medium">{item.departureStation}</span>
+                                  <span className="font-medium">{item.departureStationName}</span>
                                   <ArrowRight className="h-3 w-3 text-gray-400" />
-                                  <span className="font-medium">{item.arrivalStation}</span>
+                                  <span className="font-medium">{item.arrivalStationName}</span>
                                 </div>
                                 <div className="text-sm text-gray-600">
-                                  {item.departureTime} ~ {item.arrivalTime}
+                                  {formatTime(item.departureTime)} ~ {formatTime(item.arrivalTime)}
                                 </div>
                               </div>
                             </div>
@@ -261,10 +354,12 @@ export default function CartPage() {
                             {/* Seat Info */}
                             <div>
                               <h4 className="font-medium text-gray-900 mb-2">좌석 정보</h4>
-                              <div className="space-y-1">
-                                <div className="text-sm">{item.seatClass}</div>
-                                <div className="text-sm text-gray-600">
-                                  {item.carNumber}호차 {item.seatNumber}
+                              <div className="text-sm">
+                                <div className="font-medium">
+                                  {item.seats[0].carType === "FIRST_CLASS" ? "특실" : "일반실"}
+                                </div>
+                                <div className="text-gray-600">
+                                  {item.seats.length}매
                                 </div>
                               </div>
                             </div>
@@ -272,19 +367,27 @@ export default function CartPage() {
                             {/* Price Info */}
                             <div>
                               <h4 className="font-medium text-gray-900 mb-2">요금</h4>
-                              <div className="text-xl font-bold text-blue-600">{formatPrice(item.price)}</div>
+                              <div className="text-xl font-bold text-blue-600">{formatPrice(getTotalPrice(item))}</div>
                             </div>
                           </div>
 
-                          {/* Reservation Number */}
+                          {/* Reservation Number & Expiry */}
                           <div className="mt-4 pt-4 border-t">
-                            <div className="text-xs text-gray-500">예약번호: {item.reservationNumber}</div>
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm text-gray-500">예약번호: {item.reservationCode}</div>
+                              <div className="text-right">
+                                <div className="text-sm text-red-600 font-semibold">
+                                  결제기한: {format(new Date(item.expiresAt), "MM월 dd일 HH:mm", { locale: ko })}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                );
+              })}
               </div>
 
               {/* Payment Summary */}
@@ -305,12 +408,12 @@ export default function CartPage() {
                           <p className="text-sm text-gray-500">선택된 항목이 없습니다</p>
                         ) : (
                           selectedItems.map((item) => (
-                            <div key={item.id} className="text-sm">
+                            <div key={item.reservationId} className="text-sm">
                               <div className="flex justify-between">
                                 <span>
-                                  {item.trainType} {item.trainNumber}
+                                  {item.trainName} {item.trainNumber}
                                 </span>
-                                <span>{formatPrice(item.price)}</span>
+                                <span>{formatPrice(getTotalPrice(item))}</span>
                               </div>
                             </div>
                           ))
@@ -362,7 +465,7 @@ export default function CartPage() {
                     </Button>
 
                     {/* Continue Shopping */}
-                    <Link href="/ticket/booking">
+                    <Link href="/ticket/search">
                       <Button variant="outline" className="w-full">
                         승차권 추가 예매
                       </Button>
@@ -372,24 +475,6 @@ export default function CartPage() {
               </div>
             </div>
           )}
-
-          {/* Notice */}
-          <Card className="mt-8 bg-blue-50 border-blue-200">
-            <CardContent className="p-6">
-              <div className="flex items-start space-x-3">
-                <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div className="space-y-2 text-sm text-blue-800">
-                  <h3 className="font-semibold">장바구니 이용 안내</h3>
-                  <ul className="space-y-1 list-disc list-inside">
-                    <li>장바구니에 담긴 승차권은 임시 예약 상태로, 결제 완료 시 정식 예약됩니다.</li>
-                    <li>장바구니 항목은 24시간 후 자동으로 삭제됩니다.</li>
-                    <li>동일한 열차의 좌석은 선착순으로 배정되므로 빠른 결제를 권장합니다.</li>
-                    <li>여러 승차권을 한 번에 결제할 수 있어 편리합니다.</li>
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </main>
 

@@ -2,7 +2,17 @@
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Clock, CreditCard, X } from "lucide-react"
+import { Clock, CreditCard, X, Train } from "lucide-react"
+
+// 객차 정보 타입
+interface CarInfo {
+  id: number;
+  carNumber: string;
+  carType: 'STANDARD' | 'FIRST_CLASS';
+  totalSeats: number;
+  remainingSeats: number;
+  seatArrangement: string;
+}
 
 interface TrainInfo {
   trainType: string
@@ -38,6 +48,11 @@ interface BookingPanelProps {
   getTrainTypeColor: (trainType: string) => string
   getSeatTypeName: (seatType: string) => string
   formatPrice: (price: number) => string
+  // 새로운 props 추가
+  carList: CarInfo[]
+  loadingCars: boolean
+  // 좌석 정보 새로고침 함수 추가
+  onRefreshSeats: () => void
 }
 
 export function BookingPanel({
@@ -52,8 +67,14 @@ export function BookingPanel({
   getTrainTypeColor,
   getSeatTypeName,
   formatPrice,
+  carList,
+  loadingCars,
+  onRefreshSeats,
 }: BookingPanelProps) {
   if (!isOpen || !selectedTrain) return null
+
+  // 선택된 객차 정보 찾기
+  const selectedCarInfo = carList.find(car => parseInt(car.carNumber) === selectedCar)
 
   return (
     <>
@@ -102,6 +123,41 @@ export function BookingPanel({
               </div>
             </div>
 
+            {/* Car Information */}
+            <div className="flex flex-col">
+              <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
+                <Train className="h-4 w-4 mr-2" />
+                객차 정보
+              </h3>
+              <div className="bg-gray-50 rounded-lg p-4 flex-1 flex items-center justify-center">
+                <div className="text-center w-full">
+                  {loadingCars ? (
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span className="text-sm text-gray-600">로딩 중...</span>
+                    </div>
+                  ) : selectedCarInfo ? (
+                    <>
+                      <div className="text-sm text-gray-600 mb-1">선택된 객차</div>
+                      <div className="text-lg font-semibold">{selectedCarInfo.carNumber}호차</div>
+                      <div className="text-sm text-blue-600">
+                        {selectedCarInfo.carType === "FIRST_CLASS" ? "특실" : "일반실"}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {selectedCarInfo.remainingSeats}/{selectedCarInfo.totalSeats}석
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm text-gray-600 mb-1">객차 정보</div>
+                      <div className="text-lg font-semibold">{selectedCar}호차</div>
+                      <div className="text-sm text-gray-500">정보 없음</div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Fare Information */}
             <div className="flex flex-col">
               <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
@@ -114,6 +170,11 @@ export function BookingPanel({
                   <div className="text-2xl font-bold text-blue-600">
                     {formatPrice((selectedTrain as any)[selectedSeatType]?.price)}
                   </div>
+                  {selectedSeats.length > 0 && (
+                    <div className="text-sm text-gray-600 mt-1">
+                      총 {formatPrice((selectedTrain as any)[selectedSeatType]?.price * selectedSeats.length)}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -141,27 +202,34 @@ export function BookingPanel({
                 </div>
               </div>
               <Button 
-                onClick={onSeatSelection} 
+                onClick={() => {
+                  // 좌석 변경 시 좌석 정보 새로고침
+                  onRefreshSeats()
+                  onSeatSelection()
+                }} 
                 variant="outline" 
                 className="w-full h-10 text-base font-semibold"
               >
                 {selectedSeats.length > 0 ? "좌석 변경" : "좌석 선택"}
               </Button>
             </div>
+          </div>
 
-            {/* Booking */}
-            <div className="flex flex-col">
-              <h3 className="font-semibold text-gray-900 mb-3">예매하기</h3>
-              <div className="bg-blue-50 rounded-lg p-4 mb-3 flex-1 flex items-center justify-center">
-                <div className="text-center w-full">
-                  <div className="text-sm text-gray-700 mb-1">
-                    선택하신 열차와 좌석 정보를<br />확인하신 후 예매를 진행해 주세요.
-                  </div>
+          {/* Booking Section */}
+          <div className="mt-6 pt-6 border-t">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="text-sm text-gray-600">
+                  총 {selectedSeats.length}명 / {selectedSeats.length > 0 ? 
+                    formatPrice((selectedTrain as any)[selectedSeatType]?.price * selectedSeats.length) : 
+                    formatPrice((selectedTrain as any)[selectedSeatType]?.price)
+                  }
                 </div>
               </div>
               <Button
                 onClick={onBooking}
-                className="w-full h-10 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
+                disabled={selectedSeats.length === 0}
+                className="px-8 py-3 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 예매하기
               </Button>

@@ -1,11 +1,28 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { format, addMonths, startOfDay, isBefore, isSameDay } from "date-fns"
+import { format, addMonths, startOfDay, isBefore, isSameDay, parseISO } from "date-fns"
 import { ko } from "date-fns/locale"
 import { CalendarIcon, X, ChevronLeft, ChevronRight, Clock } from "lucide-react"
+import { trainAPI, CalendarInfo } from "@/lib/api/train"
+
+// 전역 캐시 (모든 DateTimeSelector 인스턴스가 공유)
+let globalCalendarCache: {
+  data: CalendarInfo[];
+  timestamp: number;
+  loading: boolean;
+  promise: Promise<CalendarInfo[]> | null;
+} = {
+  data: [],
+  timestamp: 0,
+  loading: false,
+  promise: null
+};
+
+// 캐시 유효 시간 (5분)
+const CACHE_DURATION = 5 * 60 * 1000;
 
 interface DateTimeSelectorProps {
   value: Date | undefined
@@ -21,12 +38,70 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
   const [selectedHour, setSelectedHour] = useState<string>(
     value ? value.getHours().toString().padStart(2, '0') + '시' : new Date().getHours().toString().padStart(2, '0') + '시'
   )
+  const [calendarData, setCalendarData] = useState<CalendarInfo[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
   // 오늘 날짜 (시간 제외)
   const today = startOfDay(new Date())
   
-  // 한 달 후 날짜 (오늘부터 정확히 한 달 뒤)
-  const oneMonthLater = addMonths(today, 1)
+  // API에서 가져온 최대 날짜 (운행 가능한 마지막 날짜)
+  const maxAvailableDate = useMemo(() => {
+    return calendarData.length > 0 
+      ? parseISO(calendarData[calendarData.length - 1].operationDate)
+      : addMonths(today, 1) // 기본값으로 한 달 후
+  }, [calendarData, today])
+
+  // 운행 캘린더 데이터 로드 (캐싱 적용)
+  useEffect(() => {
+    const loadCalendar = async () => {
+      // 캐시가 유효하면 캐시된 데이터 사용
+      const now = Date.now();
+      if (globalCalendarCache.data.length > 0 && 
+          (now - globalCalendarCache.timestamp) < CACHE_DURATION) {
+        setCalendarData(globalCalendarCache.data);
+        return;
+      }
+
+      // 이미 로딩 중이면 기존 promise 대기
+      if (globalCalendarCache.loading && globalCalendarCache.promise) {
+        try {
+          const data = await globalCalendarCache.promise;
+          setCalendarData(data);
+        } catch (error) {
+          console.error('운행 캘린더 로드 실패:', error);
+        }
+        return;
+      }
+
+      // 새로운 로딩 시작
+      setIsLoading(true);
+      globalCalendarCache.loading = true;
+      
+      const loadPromise = (async () => {
+        try {
+          const response = await trainAPI.getCalendar();
+          if (response.result) {
+            globalCalendarCache.data = response.result;
+            globalCalendarCache.timestamp = now;
+            setCalendarData(response.result);
+            return response.result;
+          }
+          return [];
+        } catch (error) {
+          console.error('운행 캘린더 로드 실패:', error);
+          return [];
+        } finally {
+          globalCalendarCache.loading = false;
+          globalCalendarCache.promise = null;
+          setIsLoading(false);
+        }
+      })();
+
+      globalCalendarCache.promise = loadPromise;
+    };
+
+    loadCalendar();
+  }, []);
 
   // 시간 옵션 (00시 ~ 23시)
   const hourOptions = Array.from({ length: 24 }, (_, i) => 
@@ -34,27 +109,37 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
   )
 
   // 현재 시간이 선택된 날짜의 과거인지 확인
-  const isPastTime = (date: Date, hour: string) => {
+  const isPastTime = useCallback((date: Date, hour: string) => {
     const selectedDateTime = new Date(date)
     selectedDateTime.setHours(parseInt(hour), 0, 0, 0)
     const now = new Date()
     // '지금 시간'은 선택 가능하게 (같은 시각은 true)
     const nowHourDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 0, 0, 0)
     return selectedDateTime < nowHourDate
-  }
+  }, [])
 
   // 날짜 선택 가능 여부 확인
-  const isDateSelectable = (date: Date) => {
-    return !isBefore(date, today) && !isBefore(oneMonthLater, date)
-  }
+  const isDateSelectable = useCallback((date: Date) => {
+    // 오늘 이후이고 최대 운행 가능 날짜 이전인지 확인
+    const isInRange = !isBefore(date, today) && !isBefore(maxAvailableDate, date)
+    
+    // API 데이터가 있으면 해당 날짜가 운행 가능한지도 확인
+    if (calendarData.length > 0) {
+      const dateStr = format(date, 'yyyy-MM-dd')
+      const calendarItem = calendarData.find(item => item.operationDate === dateStr)
+      return isInRange && calendarItem?.isBookingAvailable === 'Y'
+    }
+    
+    return isInRange
+  }, [calendarData, today, maxAvailableDate])
 
   // 시간 선택 가능 여부 확인
-  const isHourSelectable = (hour: string) => {
+  const isHourSelectable = useCallback((hour: string) => {
     if (isSameDay(tempDate, today)) {
       return !isPastTime(tempDate, hour)
     }
     return true
-  }
+  }, [tempDate, today, isPastTime])
 
   // 달력 그리드 생성
   const generateCalendarDays = () => {
@@ -76,6 +161,12 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
       const isSelected = isSameDay(currentDate, tempDate)
       const isSelectable = isDateSelectable(currentDate)
       const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6
+      
+      // API 데이터에서 해당 날짜의 정보 가져오기
+      const dateStr = format(currentDate, 'yyyy-MM-dd')
+      const calendarItem = calendarData.find(item => item.operationDate === dateStr)
+      const isHoliday = calendarItem?.isHoliday === 'Y'
+      const isBookingAvailable = calendarItem?.isBookingAvailable === 'Y'
 
       days.push(
         <button
@@ -95,17 +186,22 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
                     ? "bg-blue-600 text-white font-semibold"
                     : isToday
                       ? "bg-blue-100 text-blue-600 font-semibold hover:bg-blue-200"
-                      : isWeekend
-                        ? currentDate.getDay() === 0
-                          ? "text-red-500 hover:bg-red-50"
-                          : "text-blue-500 hover:bg-blue-50"
-                        : "text-gray-900 hover:bg-gray-100"
+                      : isHoliday
+                        ? "text-red-500 hover:bg-red-50"
+                        : isWeekend
+                          ? currentDate.getDay() === 0
+                            ? "text-red-500 hover:bg-red-50"
+                            : "text-blue-500 hover:bg-blue-50"
+                          : "text-gray-900 hover:bg-gray-100"
                   : "text-gray-300 cursor-not-allowed"
                 : "text-gray-300"
             }
           `}
         >
           {currentDate.getDate()}
+          {isHoliday && (
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+          )}
         </button>
       )
     }
@@ -223,14 +319,21 @@ export function DateTimeSelector({ value, onValueChange, placeholder, label, var
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <h3 className="text-lg font-bold">{format(tempDate, "yyyy. MM.", { locale: ko })}</h3>
+                <div className="text-center">
+                  <h3 className="text-lg font-bold">{format(tempDate, "yyyy. MM.", { locale: ko })}</h3>
+                  {!isLoading && calendarData.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      예약 가능: {format(today, "MM/dd")} ~ {format(maxAvailableDate, "MM/dd")}
+                    </p>
+                  )}
+                </div>
                 <button
                   className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
                   onClick={() => {
                     const nextMonth = new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 1)
                     setTempDate(nextMonth)
                   }}
-                  disabled={isBefore(oneMonthLater, new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 1))}
+                  disabled={isBefore(maxAvailableDate, new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 1))}
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>

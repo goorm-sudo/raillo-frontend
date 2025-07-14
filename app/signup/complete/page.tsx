@@ -5,9 +5,8 @@ import {useEffect, useState} from "react"
 import {useRouter, useSearchParams} from "next/navigation"
 import {Button} from "@/components/ui/button"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
-import {AlertCircle, CheckCircle, CreditCard, Home, Printer, Train, User} from "lucide-react"
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
+import {AlertCircle, CheckCircle, CreditCard, Train, User} from "lucide-react"
+import PageLayout from "@/components/layout/PageLayout"
 
 export default function SignupCompletePage() {
   const router = useRouter()
@@ -43,8 +42,7 @@ export default function SignupCompletePage() {
   // 유효하지 않은 접근일 때
   if (!isValidAccess) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-        <Header />
+      <PageLayout>
         <div className="container mx-auto px-4 py-16 text-center">
           <div className="max-w-md mx-auto">
             <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
@@ -68,63 +66,20 @@ export default function SignupCompletePage() {
             </div>
           </div>
         </div>
-        <Footer />
-      </div>
+      </PageLayout>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <Train className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-blue-600">RAIL-O</h1>
-            </Link>
-            <nav className="hidden md:flex items-center space-x-6">
-              <Link href="/login" className="text-gray-600 hover:text-blue-600">
-                로그인
-              </Link>
-              <Link href="/" className="text-gray-600 hover:text-blue-600">
-                홈으로
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
-
-      {/* Page Header */}
-      <div className="bg-blue-500 text-white py-6">
-        <div className="container mx-auto px-4">
-          <h1 className="text-2xl font-bold text-center">회원가입 완료</h1>
-        </div>
-      </div>
-
-      {/* Breadcrumb */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Home className="h-4 w-4" />
-              <Link href="/" className="hover:text-blue-600">
-                홈
-              </Link>
-              <span>/</span>
-              <span className="text-gray-900">회원가입 완료</span>
-            </div>
-            <Button variant="outline" size="sm" className="flex items-center space-x-1">
-              <Printer className="h-4 w-4" />
-              <span>인쇄</span>
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
+    <PageLayout>
+      <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
+                    {/* Page Title */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">회원가입 완료</h1>
+            <p className="text-gray-600">RAIL-O 멤버십에 가입해주셔서 감사합니다</p>
+          </div>
+
           <Card className="bg-white shadow-lg border-0">
             <CardContent className="p-12 text-center">
               {/* Success Icon */}
@@ -195,7 +150,7 @@ export default function SignupCompletePage() {
                     variant="outline"
                     className="flex-1 border-green-600 text-green-600 hover:bg-green-50"
                   >
-                    <Link href="/ticket/search">기차표 예매</Link>
+                    <Link href="/ticket/booking">기차표 예매</Link>
                   </Button>
                 </div>
               </div>
@@ -215,10 +170,7 @@ export default function SignupCompletePage() {
             </CardContent>
           </Card>
         </div>
-      </main>
-
-      {/* Footer */}
-      <Footer />
-    </div>
+      </div>
+    </PageLayout>
   )
 }

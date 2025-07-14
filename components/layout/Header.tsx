@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Train, ShoppingCart, User, LogIn, Menu, X, CreditCard, Ticket, CalendarIcon, Search, RotateCcw, ChevronRight, LogOut } from "lucide-react"
+import { Train, ShoppingCart, User, LogIn, Menu, X, CreditCard, Ticket, CalendarIcon, Search, RotateCcw, ChevronRight, LogOut, Lock, Phone } from "lucide-react"
 import { tokenManager } from "@/lib/auth"
 import { logout } from "@/lib/api/auth"
 
@@ -29,12 +29,14 @@ export default function Header() {
       await logout()
       tokenManager.removeToken()
       updateLoginStatus()
+      alert("로그아웃되었습니다.")
       router.push("/")
     } catch (error: any) {
       console.error("로그아웃 에러:", error)
       // 로그아웃 API 실패해도 로컬 토큰은 제거
       tokenManager.removeToken()
       updateLoginStatus()
+      alert("로그아웃되었습니다.")
       router.push("/")
     }
   }
@@ -59,7 +61,6 @@ export default function Header() {
       'purchased': '구매완료',
       'reservation': '예약',
       'reservations': '예약승차권 조회',
-      'regular': '정기승차권',
       'general': '일반',
       'guest-ticket': '비회원',
       'tickets': '승차권 목록',
@@ -215,14 +216,7 @@ export default function Header() {
                     <Ticket className="h-5 w-5 text-blue-600" />
                     <span className="text-gray-700">승차권 예매</span>
                   </Link>
-                  <Link 
-                    href="/ticket/regular" 
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors bg-white"
-                    onClick={() => setShowSidebar(false)}
-                  >
-                    <CalendarIcon className="h-5 w-5 text-purple-600" />
-                    <span className="text-gray-700">정기 승차권</span>
-                  </Link>
+
                   <Link 
                     href="/ticket/reservations" 
                     className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors bg-white"
@@ -232,24 +226,12 @@ export default function Header() {
                     <span className="text-gray-700">예약 승차권 조회</span>
                   </Link>
                   <Link 
-                    href="/ticket/purchased" 
+                    href="/ticket/reservations" 
                     className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors bg-white"
                     onClick={() => setShowSidebar(false)}
                   >
                     <RotateCcw className="h-5 w-5 text-red-600" />
                     <span className="text-gray-700">승차권 반환</span>
-                  </Link>
-                </div>
-                {/* 비회원 서비스 섹션 */}
-                <div className="space-y-1 mt-6">
-                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">비회원 서비스</h3>
-                  <Link 
-                    href="/guest-ticket/search" 
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors bg-white"
-                    onClick={() => setShowSidebar(false)}
-                  >
-                    <User className="h-5 w-5 text-indigo-600" />
-                    <span className="text-gray-700">비회원 승차권 확인</span>
                   </Link>
                 </div>
               </nav>

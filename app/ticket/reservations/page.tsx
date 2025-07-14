@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from '@/hooks/use-auth'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +19,8 @@ import { ko } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
+import { getReservationList, deleteReservation, ReservationDetailResponse } from '@/lib/api/booking'
+import { handleError } from '@/lib/utils/errorHandler'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,69 +32,45 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-interface ReservationItem {
-  id: string
-  trainType: string
-  trainNumber: string
-  date: string
-  departureStation: string
-  arrivalStation: string
-  departureTime: string
-  arrivalTime: string
-  seatClass: string
-  carNumber: number
-  seatNumber: string
-  price: number
-  reservationNumber: string
-  paymentDeadline: Date
-  status: "pending" | "expired"
-}
+
 
 export default function ReservationsPage() {
   const router = useRouter()
+  const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/ticket/reservations' })
   const [showCancelDialog, setShowCancelDialog] = useState(false)
-  const [selectedReservation, setSelectedReservation] = useState<string | null>(null)
+  const [selectedReservation, setSelectedReservation] = useState<number | null>(null)
+  const [reservations, setReservations] = useState<ReservationDetailResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 예약 목록 (결제 안된 예약들)
-  const [reservations] = useState<ReservationItem[]>([
-    {
-      id: "1",
-      trainType: "ITX-새마을",
-      trainNumber: "1036",
-      date: "2025년 06월 02일(월)",
-      departureStation: "대구",
-      arrivalStation: "서울",
-      departureTime: "09:33",
-      arrivalTime: "13:14",
-      seatClass: "일반실",
-      carNumber: 3,
-      seatNumber: "8A",
-      price: 42400,
-      reservationNumber: "R2025060100001",
-      paymentDeadline: new Date(Date.now() + 25 * 60 * 1000), // 25분 후
-      status: "pending",
-    },
-    {
-      id: "2",
-      trainType: "KTX",
-      trainNumber: "101",
-      date: "2025년 06월 05일(목)",
-      departureStation: "서울",
-      arrivalStation: "부산",
-      departureTime: "06:00",
-      arrivalTime: "08:42",
-      seatClass: "일반실",
-      carNumber: 2,
-      seatNumber: "15B",
-      price: 59800,
-      reservationNumber: "R2025060100002",
-      paymentDeadline: new Date(Date.now() - 5 * 60 * 1000), // 5분 전 (만료)
-      status: "expired",
-    },
-  ])
+  // 예약 목록 조회
+  useEffect(() => {
+    // 로그인 상태가 확인된 후에만 예약 목록을 조회
+    if (isChecking || !isAuthenticated) return
+    
+    const fetchReservations = async () => {
+      try {
+        setLoading(true)
+        const response = await getReservationList()
+        if (response.result) {
+          setReservations(response.result)
+        } else {
+          setReservations([])
+        }
+      } catch (err) {
+        const errorMessage = handleError(err, '예약 목록 조회 중 오류가 발생했습니다.', false)
+        setError(errorMessage)
+        setReservations([])
+      } finally {
+        setLoading(false)
+      }
+    }
 
-  const getTrainTypeColor = (trainType: string) => {
-    switch (trainType) {
+    fetchReservations()
+  }, [isChecking, isAuthenticated])
+
+  const getTrainTypeColor = (trainName: string) => {
+    switch (trainName) {
       case "KTX":
         return "bg-blue-600 text-white"
       case "ITX-새마을":
@@ -109,36 +88,100 @@ export default function ReservationsPage() {
     return price.toLocaleString() + "원"
   }
 
-  const getTimeRemaining = (deadline: Date) => {
-    const now = new Date()
-    const diff = deadline.getTime() - now.getTime()
-
-    if (diff <= 0) {
-      return "결제 기한 만료"
-    }
-
-    const minutes = Math.floor(diff / (1000 * 60))
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-    return `${minutes}분 ${seconds}초 남음`
+  const getTotalPrice = (seats: ReservationDetailResponse['seats']) => {
+    return seats.reduce((total, seat) => total + seat.fare, 0)
   }
 
-  const handleCancelReservation = (reservationId: string) => {
+  const getSeatSummary = (seats: ReservationDetailResponse['seats']) => {
+    const seatType = seats[0]?.carType === "FIRST_CLASS" ? "특실" : "일반실"
+    return `${seatType} ${seats.length}매`
+  }
+
+  const isExpired = (expiresAt: string) => {
+    return new Date(expiresAt) <= new Date()
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return format(date, "yyyy년 MM월 dd일(EEEE)", { locale: ko })
+  }
+
+  const formatTime = (timeString: string) => {
+    return timeString.substring(0, 5) // "HH:mm" 형식으로 변환
+  }
+
+  const handleCancelReservation = (reservationId: number) => {
     setSelectedReservation(reservationId)
     setShowCancelDialog(true)
   }
 
-  const confirmCancelReservation = () => {
+  const confirmCancelReservation = async () => {
     if (selectedReservation) {
-      // 실제로는 API 호출하여 예약 취소
-      console.log("예약 취소:", selectedReservation)
-      alert("예약이 취소되었습니다.")
+      try {
+        await deleteReservation(selectedReservation)
+        alert("예약이 취소되었습니다.")
+        // 예약 목록 다시 조회
+        const response = await getReservationList()
+        if (response.result) {
+          setReservations(response.result)
+        }
+      } catch (err) {
+        handleError(err, '예약 취소 중 오류가 발생했습니다.')
+      }
     }
     setShowCancelDialog(false)
     setSelectedReservation(null)
   }
 
-  const handlePayment = (reservationId: string) => {
+  const handlePayment = (reservationId: number) => {
+    // 예약 ID를 세션 스토리지에 저장하고 결제 페이지로 이동
+    sessionStorage.setItem('tempReservationId', reservationId.toString())
     router.push("/ticket/payment")
+  }
+
+  // 로그인 상태 확인 중이거나 인증되지 않은 경우 로딩 표시
+  if (isChecking || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">인증을 확인하고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">예약 목록을 불러오고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="text-red-600 mb-4">
+            <p className="text-lg font-semibold">예약 목록을 불러올 수 없습니다</p>
+            <p className="text-sm">{error}</p>
+          </div>
+          <Button onClick={() => router.push('/')} variant="outline">
+            홈으로 돌아가기
+          </Button>
+        </div>
+        <Footer />
+      </div>
+    )
   }
 
   return (
@@ -169,40 +212,56 @@ export default function ReservationsPage() {
           <div className="space-y-4">
             <h3 className="text-xl font-bold text-gray-900">예약 내역</h3>
 
-            {reservations.length === 0 ? (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">예약 내역이 없습니다</h3>
-                  <p className="text-gray-600 mb-6">새로운 예약을 진행하세요.</p>
-                  <Link href="/ticket/booking">
-                    <Button className="bg-blue-600 hover:bg-blue-700">승차권 예매하기</Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ) : (
-              reservations.map((reservation) => (
+            {(() => {
+              const validReservations = reservations.filter(reservation => !isExpired(reservation.expiresAt))
+              
+              if (reservations.length === 0) {
+                return (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">예약 내역이 없습니다</h3>
+                      <p className="text-gray-600 mb-6">새로운 예약을 진행하세요.</p>
+                      <Link href="/ticket/booking">
+                        <Button className="bg-blue-600 hover:bg-blue-700">승차권 예매하기</Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                )
+              }
+              
+              if (validReservations.length === 0) {
+                return (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">유효한 예약이 없습니다</h3>
+                      <p className="text-gray-600 mb-6">결제 기한이 지난 예약은 자동으로 삭제됩니다.</p>
+                      <Link href="/ticket/booking">
+                        <Button className="bg-blue-600 hover:bg-blue-700">승차권 예매하기</Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                )
+              }
+              
+              return validReservations.map((reservation) => (
                 <Card
-                  key={reservation.id}
-                  className={`${reservation.status === "expired" ? "bg-gray-50 border-gray-300" : "border-blue-200"}`}
+                  key={reservation.reservationId}
+                  className="border-blue-200"
                 >
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center space-x-3">
-                        <Badge className={`${getTrainTypeColor(reservation.trainType)} px-3 py-1`}>
-                          {reservation.trainType}
+                        <Badge className={`${getTrainTypeColor(reservation.trainName)} px-3 py-1`}>
+                          {reservation.trainName}
                         </Badge>
                         <span className="text-lg font-bold">{reservation.trainNumber}</span>
-                        <span className="text-gray-600">{reservation.date}</span>
-                        {reservation.status === "expired" && (
-                          <Badge variant="destructive" className="bg-red-600">
-                            결제기한만료
-                          </Badge>
-                        )}
+                        <span className="text-gray-600">{formatDate(reservation.operationDate)}</span>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-bold text-blue-600">{formatPrice(reservation.price)}</div>
-                        <div className="text-xs text-gray-500">예약번호: {reservation.reservationNumber}</div>
+                        <div className="text-xl font-bold text-blue-600">{formatPrice(getTotalPrice(reservation.seats))}</div>
+                        <div className="text-xs text-gray-500">예약번호: {reservation.reservationCode}</div>
                       </div>
                     </div>
 
@@ -215,12 +274,12 @@ export default function ReservationsPage() {
                         </h4>
                         <div className="space-y-1">
                           <div className="flex items-center space-x-2">
-                            <span className="font-medium">{reservation.departureStation}</span>
+                            <span className="font-medium">{reservation.departureStationName}</span>
                             <ArrowRight className="h-3 w-3 text-gray-400" />
-                            <span className="font-medium">{reservation.arrivalStation}</span>
+                            <span className="font-medium">{reservation.arrivalStationName}</span>
                           </div>
                           <div className="text-sm text-gray-600">
-                            {reservation.departureTime} ~ {reservation.arrivalTime}
+                            {formatTime(reservation.departureTime)} ~ {formatTime(reservation.arrivalTime)}
                           </div>
                         </div>
                       </div>
@@ -229,9 +288,8 @@ export default function ReservationsPage() {
                       <div>
                         <h4 className="font-medium text-gray-900 mb-2">좌석 정보</h4>
                         <div className="space-y-1">
-                          <div className="text-sm">{reservation.seatClass}</div>
-                          <div className="text-sm text-gray-600">
-                            {reservation.carNumber}호차 {reservation.seatNumber}
+                          <div className="text-sm font-medium">
+                            {getSeatSummary(reservation.seats)}
                           </div>
                         </div>
                       </div>
@@ -244,14 +302,7 @@ export default function ReservationsPage() {
                         </h4>
                         <div className="space-y-1">
                           <div className="text-sm">
-                            {format(reservation.paymentDeadline, "MM/dd HH:mm", { locale: ko })}
-                          </div>
-                          <div
-                            className={`text-sm font-medium ${
-                              reservation.status === "expired" ? "text-red-600" : "text-orange-600"
-                            }`}
-                          >
-                            {getTimeRemaining(reservation.paymentDeadline)}
+                            {format(new Date(reservation.expiresAt), "MM/dd HH:mm", { locale: ko })}
                           </div>
                         </div>
                       </div>
@@ -262,27 +313,25 @@ export default function ReservationsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleCancelReservation(reservation.id)}
+                        onClick={() => handleCancelReservation(reservation.reservationId)}
                         className="text-red-600 border-red-600 hover:bg-red-50"
                       >
                         <X className="h-4 w-4 mr-1" />
                         예약취소
                       </Button>
-                      {reservation.status === "pending" && (
-                        <Button
-                          size="sm"
-                          onClick={() => handlePayment(reservation.id)}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          <CreditCard className="h-4 w-4 mr-1" />
-                          결제하기
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        onClick={() => handlePayment(reservation.reservationId)}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <CreditCard className="h-4 w-4 mr-1" />
+                        결제하기
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
               ))
-            )}
+            })()}
           </div>
 
           {/* Notice */}

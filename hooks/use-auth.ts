@@ -1,33 +1,37 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { tokenManager } from '@/lib/auth'
 
 interface UseAuthOptions {
   redirectTo?: string
   requireAuth?: boolean
+  redirectPath?: string
 }
 
 export function useAuth(options: UseAuthOptions = {}) {
-  const { redirectTo = '/login', requireAuth = true } = options
+  const { redirectTo = '/login', requireAuth = true, redirectPath } = options
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  useEffect(() => {
-    const checkAuth = () => {
-      const authenticated = tokenManager.isAuthenticated()
-      setIsLoggedIn(authenticated)
-      
-      if (requireAuth && !authenticated) {
-        // 로그인이 필요한데 로그인되지 않은 경우 리다이렉트
-        router.push(redirectTo)
-      }
-      
-      setIsLoading(false)
+  const checkAuth = useCallback(() => {
+    const authenticated = tokenManager.isAuthenticated()
+    setIsLoggedIn(authenticated)
+    
+    if (requireAuth && !authenticated) {
+      // 리다이렉트 경로가 있으면 해당 경로로, 없으면 기본 로그인 페이지로
+      const redirectUrl = redirectPath 
+        ? `${redirectTo}?redirectTo=${encodeURIComponent(redirectPath)}`
+        : redirectTo
+      router.push(redirectUrl)
     }
+    
+    setIsLoading(false)
+  }, [requireAuth, redirectTo, redirectPath, router])
 
+  useEffect(() => {
     checkAuth()
-  }, [router, redirectTo, requireAuth])
+  }, [checkAuth])
 
   return {
     isLoggedIn,
