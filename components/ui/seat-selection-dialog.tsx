@@ -78,6 +78,8 @@ export function SeatSelectionDialog({
   // 다이얼로그가 열릴 때마다 초기화
   useEffect(() => {
     if (isOpen && carList.length > 0) {
+      console.log('🔍 SeatSelectionDialog 초기화:', { selectedSeatType, carListLength: carList.length })
+      
       // 선택된 좌석 타입에 맞는 첫 번째 객차 선택
       const suitableCar = carList.find(car => {
         if (selectedSeatType === "reservedSeat") {
@@ -86,23 +88,55 @@ export function SeatSelectionDialog({
           return car.carType === "STANDARD"
         }
         return true // 입석은 모든 객차
-      }) || carList[0]
+      })
       
-      setSelectedCar(suitableCar)
+      console.log('🔍 suitableCar 찾기 결과:', { suitableCar: suitableCar?.carNumber, suitableCarType: suitableCar?.carType })
       
-      // 다이얼로그가 열릴 때만 좌석 정보 새로고침
-      if (isOpen) {
-        onRefreshSeats()
+      // 적절한 객차를 찾지 못한 경우, 좌석 타입에 맞는 객차만 필터링해서 첫 번째 선택
+      if (!suitableCar) {
+        const filteredCars = carList.filter(car => {
+          if (selectedSeatType === "reservedSeat") {
+            return car.carType === "FIRST_CLASS"
+          } else if (selectedSeatType === "generalSeat") {
+            return car.carType === "STANDARD"
+          }
+          return true
+        })
+        
+        console.log('🔍 filteredCars 결과:', { filteredCarsLength: filteredCars.length, firstCar: filteredCars[0]?.carNumber })
+        
+        if (filteredCars.length > 0) {
+          console.log('🔍 setSelectedCar 호출 (filtered):', filteredCars[0].carNumber)
+          setSelectedCar(filteredCars[0])
+        }
+      } else {
+        console.log('🔍 setSelectedCar 호출 (suitable):', suitableCar.carNumber)
+        setSelectedCar(suitableCar)
       }
+      
+      // selectedCar가 설정되면 자동으로 onCarSelect가 호출되므로 
+      // 여기서는 onRefreshSeats를 호출하지 않음
     }
-  }, [isOpen, carList, selectedSeatType]) // onRefreshSeats 제거
+  }, [isOpen, carList, selectedSeatType])
 
-  // selectedCar가 변경될 때만 onCarSelect 호출
+  // selectedCar가 변경될 때만 onCarSelect 호출 (중복 방지)
+  const lastSelectedCarId = useRef<string | null>(null)
+  
   useEffect(() => {
-    if (selectedCar) {
-      onCarSelectRef.current(selectedCar.id.toString())
+    if (selectedCar && isOpen) {
+      const carId = selectedCar.id.toString()
+      
+      // 같은 객차가 이미 선택된 경우 중복 호출 방지
+      if (lastSelectedCarId.current === carId) {
+        console.log('🔍 중복 호출 방지:', carId)
+        return
+      }
+      
+      console.log('🔍 selectedCar 변경됨, onCarSelect 호출:', selectedCar.carNumber)
+      lastSelectedCarId.current = carId
+      onCarSelectRef.current(carId)
     }
-  }, [selectedCar])
+  }, [selectedCar, isOpen])
   
   // 객차 변경 핸들러
   const handleCarChange = (carId: string) => {
