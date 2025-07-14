@@ -44,17 +44,17 @@ export interface ReservationDetailResponse {
 
 // 예약 요청 함수
 export const makeReservation = async (request: ReservationRequest) => {
-  return api.post<ReservationResponse>("/api/v1/booking/reservation", request)
+  return api.post<ReservationResponse>("/booking/reservation", request)
 }
 
 // 예약 정보 조회 함수
 export const getReservationDetail = async (reservationId: number) => {
-  return api.get<ReservationDetailResponse>(`/api/v1/booking/reservation/${reservationId}`)
+  return api.get<ReservationDetailResponse>(`/booking/reservation/${reservationId}`)
 }
 
 // 예약 취소 함수 (body에 reservationId를 JSON으로 보냄)
 export const deleteReservation = async (reservationId: number) => {
-  return api.delete("/api/v1/booking/reservation", {
+  return api.delete("/booking/reservation", {
     reservationId
   })
 }
@@ -77,17 +77,17 @@ export interface CartResponse {
 
 // 장바구니에 예약 추가 함수
 export const addToCart = async (request: AddToCartRequest) => {
-  return api.post<AddToCartResponse>("/api/v1/cart/reservations", request)
+  return api.post<AddToCartResponse>("/cart/reservations", request)
 }
 
 // 장바구니 조회 함수
 export const getCart = async () => {
-  return api.get<CartResponse>("/api/v1/cart/reservations")
+  return api.get<CartResponse>("/cart/reservations")
 }
 
 // 예약 목록 조회 함수
 export const getReservationList = async () => {
-  return api.get<ReservationDetailResponse[]>("/api/v1/booking/reservation")
+  return api.get<ReservationDetailResponse[]>("/booking/reservation")
 }
 
  

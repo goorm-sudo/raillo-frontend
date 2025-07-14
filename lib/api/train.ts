@@ -249,22 +249,22 @@ export const trainAPI = {
     size: number = 10
   ): Promise<ApiResponse<TrainSearchResponse>> => {
     const params = new URLSearchParams({ page: String(page), size: String(size) }).toString();
-    return api.post<TrainSearchResponse>(`/api/v1/trains/search?${params}`, request);
+    return api.post<TrainSearchResponse>(`/trains/search?${params}`, request);
   },
 
   // 운행 캘린더 조회
   getCalendar: async (): Promise<ApiResponse<CalendarInfo[]>> => {
-    return api.get<CalendarInfo[]>('/api/v1/trains/calendar');
+    return api.get<CalendarInfo[]>('/trains/calendar');
   },
 
   // 객차 조회
   searchCars: async (request: CarSearchRequest): Promise<ApiResponse<CarSearchResponse>> => {
-    return api.post<CarSearchResponse>('/api/v1/trains/cars', request);
+    return api.post<CarSearchResponse>('/trains/cars', request);
   },
 
   // 좌석 조회
   searchSeats: async (request: SeatSearchRequest): Promise<ApiResponse<SeatSearchResponse>> => {
-    return api.post<SeatSearchResponse>('/api/v1/trains/seats', request);
+    return api.post<SeatSearchResponse>('/trains/seats', request);
   },
 };
 

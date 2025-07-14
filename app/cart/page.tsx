@@ -192,6 +192,19 @@ export default function CartPage() {
       alert("결제할 항목을 선택해주세요.")
       return
     }
+    
+    // 선택된 예약 정보를 세션 스토리지에 저장
+    sessionStorage.setItem('paymentReservations', JSON.stringify(selectedItems));
+    sessionStorage.setItem('paymentType', 'cart'); // 장바구니
+    
+    // 결제에 필요한 추가 정보 저장
+    const paymentInfo = {
+      totalAmount: totalPrice,
+      itemCount: selectedItems.length,
+      createdAt: new Date().toISOString()
+    };
+    sessionStorage.setItem('paymentInfo', JSON.stringify(paymentInfo));
+    
     router.push("/ticket/payment")
   }
 

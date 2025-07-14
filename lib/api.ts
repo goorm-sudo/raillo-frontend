@@ -74,7 +74,14 @@ async function apiRequest<T>(
     options: RequestInit = {},
     retryCount: number = 0
 ): Promise<ApiResponse<T>> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    // auth 관련 엔드포인트는 /api/v1 접두사 없이 사용
+    let url: string;
+    if (endpoint.startsWith('/auth')) {
+        const baseUrlWithoutApiPrefix = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:8080';
+        url = `${baseUrlWithoutApiPrefix}${endpoint}`;
+    } else {
+        url = `${API_BASE_URL}${endpoint}`;
+    }
     const startTime = new Date();
 
     const config: RequestInit = {
@@ -191,16 +198,23 @@ async function apiRequest<T>(
 export const api = {
     // GET 요청
     get: <T>(endpoint: string, params?: Record<string, any>): Promise<ApiResponse<T>> => {
-        const url = new URL(`${API_BASE_URL}${endpoint}`);
+        // params가 있으면 query string 생성
+        let queryString = '';
         if (params) {
+            const searchParams = new URLSearchParams();
             Object.entries(params).forEach(([key, value]) => {
                 if (value !== undefined && value !== null) {
-                    url.searchParams.append(key, String(value));
+                    searchParams.append(key, String(value));
                 }
             });
+            queryString = searchParams.toString();
+            if (queryString) {
+                queryString = '?' + queryString;
+            }
         }
 
-        return apiRequest<T>(url.pathname + url.search);
+        // apiRequest에 endpoint와 query string만 전달
+        return apiRequest<T>(endpoint + queryString);
     },
 
     // POST 요청

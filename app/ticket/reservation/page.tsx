@@ -35,6 +35,7 @@ import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import { deleteReservation, getReservationDetail, addToCart } from '@/lib/api/booking'
 import { handleError } from '@/lib/utils/errorHandler'
+import { sessionStorageDebug } from '@/lib/utils/sessionStorageDebug'
 
 interface ReservationDetail {
   reservationId: number;
@@ -181,6 +182,41 @@ export default function ReservationPage() {
   }
 
   const handlePayment = () => {
+    console.log('결제하기 버튼 클릭됨, 예약 정보:', reservation);
+    
+    // 현재 예약 정보를 세션 스토리지에 저장
+    if (reservation) {
+      // 단일 예약 정보를 배열로 저장 (장바구니와 통일된 형식)
+      sessionStorageDebug.set('paymentReservations', [reservation]);
+      sessionStorageDebug.set('paymentType', 'single'); // 단일 예약
+      
+      // 결제 페이지에서 필요한 예약 ID와 번호 저장
+      const reservationId = reservation.reservationId?.toString() || '';
+      const reservationCode = reservation.reservationCode || '';
+      
+      console.log('세션 스토리지에 저장 중:', {
+        reservationId,
+        reservationCode,
+        reservation
+      });
+      
+      sessionStorageDebug.set('currentReservationId', reservationId);
+      sessionStorageDebug.set('currentReservationNumber', reservationCode);
+      
+      // 전체 세션스토리지 확인
+      sessionStorageDebug.getAll();
+      
+      // 결제에 필요한 추가 정보 저장
+      const paymentInfo = {
+        totalAmount: getTotalPrice(),
+        itemCount: 1,
+        createdAt: new Date().toISOString()
+      };
+      sessionStorageDebug.set('paymentInfo', paymentInfo);
+    } else {
+      console.error('예약 정보가 없습니다');
+    }
+    
     router.push("/ticket/payment")
   }
 

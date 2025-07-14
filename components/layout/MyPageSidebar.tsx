@@ -163,12 +163,18 @@ export default function MyPageSidebar({ memberInfo }: MyPageSidebarProps) {
                 />
               </CollapsibleTrigger>
               <CollapsibleContent className="bg-gray-50">
-                <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
-                  <span>간편구매정보등록</span>
-                </div>
-                <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
-                  <span>간편현금결제 설정</span>
-                </div>
+                <Link
+                  href="/mypage/payment-history"
+                  className="flex items-center space-x-3 px-8 py-2 text-sm text-gray-600 hover:text-blue-600"
+                >
+                  <span>결제 내역</span>
+                </Link>
+                <Link
+                  href="/mypage/saved-payment-methods"
+                  className="flex items-center space-x-3 px-8 py-2 text-sm text-gray-600 hover:text-blue-600"
+                >
+                  <span>간편구매정보 등록</span>
+                </Link>
               </CollapsibleContent>
             </Collapsible>
 

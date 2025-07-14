@@ -34,12 +34,12 @@ export interface MemberInfo {
 export const userAPI = {
   // 내 정보 조회
   getMyInfo: async (): Promise<ApiResponse<MemberInfoResponse>> => {
-    return api.get<MemberInfoResponse>('/api/v1/members/me');
+    return api.get<MemberInfoResponse>('/members/me');
   },
   
   // 회원 탈퇴
   deleteAccount: async (): Promise<ApiResponse<{ message: string }>> => {
-    return api.delete<{ message: string }>('/api/v1/members');
+    return api.delete<{ message: string }>('/members');
   },
 
   // 이메일 변경 인증코드 발송
@@ -54,12 +54,12 @@ export const userAPI = {
 
   // 비밀번호 변경
   updatePassword: async (newPassword: string): Promise<ApiResponse<{ message: string }>> => {
-    return api.put<{ message: string }>('/api/v1/members/password', { newPassword });
+    return api.put<{ message: string }>('/members/password', { newPassword });
   },
 
   // 휴대폰 번호 변경
   updatePhoneNumber: async (newPhoneNumber: string): Promise<ApiResponse<{ message: string }>> => {
-    return api.put<{ message: string }>('/api/v1/members/phone-number', { newPhoneNumber });
+    return api.put<{ message: string }>('/members/phone-number', { newPhoneNumber });
   },
 
   // 이메일 인증코드 발송

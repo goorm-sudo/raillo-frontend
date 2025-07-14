@@ -200,8 +200,10 @@ export default function TrainSearchPage() {
         arrivalStationId,
         operationDate: searchData.departureDate,
         passengerCount: totalPassengers,
-        departureHour: searchData.departureHour.replace("시", "")
+        departureHour: String(searchData.departureHour || "00").replace("시", "")
       }
+      
+      console.log('🚂 Train Search Request:', searchRequest)
 
       // 열차 조회 API 호출
       const response = await searchTrains(searchRequest, 0, 10)

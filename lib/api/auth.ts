@@ -109,7 +109,7 @@ export const authAPI = {
 
     // 비밀번호 변경 (임시 토큰 사용)
     changePassword: async (requestData: ChangePasswordRequest, temporaryToken: string): Promise<ApiResponse> => {
-        const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/members/password`;
+        const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/members/password`;
         
         const response = await fetch(url, {
             method: 'PUT',
