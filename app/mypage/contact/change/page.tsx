@@ -1,20 +1,22 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Train, ChevronDown, User, CreditCard, Ticket, ShoppingCart, Settings, Star, Printer, Home } from "lucide-react"
-import { updateEmail, updatePhoneNumber } from "@/lib/api/user"
+import { sendEmailVerificationCode, updatePhoneNumber } from "@/lib/api/user"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function ContactChangePage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { isChecking, isAuthenticated } = useAuth()
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     ticketInfo: false,
     membershipPerformance: false,
@@ -27,6 +29,23 @@ export default function ContactChangePage() {
   const [phoneNumber2, setPhoneNumber2] = useState("")
   const [phoneNumber3, setPhoneNumber3] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // 로딩 중이거나 인증 확인 중일 때
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">페이지를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 로그인되지 않은 경우
+  if (!isAuthenticated) {
+    return null
+  }
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({
@@ -57,17 +76,18 @@ export default function ContactChangePage() {
 
     setIsSubmitting(true)
     try {
-      await updateEmail(emailAddress)
+      await sendEmailVerificationCode(emailAddress)
       toast({
         title: "성공",
-        description: "이메일 변경 요청이 성공적으로 처리되었습니다.",
+        description: "이메일 인증코드가 발송되었습니다.",
       })
-      router.push("/mypage")
+      // 인증코드 입력 페이지로 이동하거나 상태를 변경할 수 있습니다
+      router.push("/mypage/email/change")
     } catch (error) {
-      console.error('이메일 변경 실패:', error)
+      console.error('이메일 인증코드 발송 실패:', error)
       toast({
         title: "오류",
-        description: "이메일 변경에 실패했습니다. 다시 시도해주세요.",
+        description: "이메일 인증코드 발송에 실패했습니다. 다시 시도해주세요.",
         variant: "destructive",
       })
     } finally {
