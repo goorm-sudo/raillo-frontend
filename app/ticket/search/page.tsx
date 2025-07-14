@@ -1174,7 +1174,11 @@ export default function TrainSearchPage() {
       {/* Seat Selection Dialog */}
       <SeatSelectionDialog
         isOpen={showSeatSelection}
-        onClose={() => setShowSeatSelection(false)}
+        onClose={() => {
+          setShowSeatSelection(false)
+          // 다이얼로그 닫을 때 선택된 좌석 초기화
+          setSelectedSeats([])
+        }}
         selectedTrain={selectedTrain}
         selectedSeatType={selectedSeatType}
         selectedSeats={selectedSeats}
