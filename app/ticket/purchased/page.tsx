@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,36 +12,62 @@ import { ko } from "date-fns/locale"
 import { Train, ChevronLeft, MapPin, ArrowRight, Download, QrCode, Calendar, User, Clock, Printer, CreditCard } from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
+import { getTickets } from '@/lib/api/booking'
+import { handleError } from '@/lib/utils/errorHandler'
+import { differenceInMinutes, parse } from "date-fns"
 
-interface PurchasedTicket {
-  id: string
-  trainType: string
-  trainNumber: string
-  date: string
-  departureStation: string
-  arrivalStation: string
+interface Ticket {
+  ticketId: number
+  reservationId: number
+  seatReservationId: number
+  operationDate: string
+  departureStationId: number
+  departureStationName: string
   departureTime: string
+  arrivalStationId: number
+  arrivalStationName: string
   arrivalTime: string
-  seatClass: string
-  carNumber: number
-  seatNumber: string
-  price: number
-  ticketNumber: string
-  purchaseDate: Date
-  status: "valid" | "used" | "expired"
+  trainNumber: string
+  trainName: string
+  trainCarType: string
+  trainCarNumber: number
+  seatRow: number
+  seatColumn: string
+  seatType: string
 }
 
 export default function PurchasedTicketsPage() {
   const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/ticket/purchased' })
+  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 구매한 승차권 목록
-  const [tickets] = useState<PurchasedTicket[]>([
-    // 빈 배열로 설정하여 empty state 표시
-  ])
+  // 승차권 목록 조회
+  useEffect(() => {
+    // 로그인 상태가 확인된 후에만 승차권 목록을 조회
+    if (isChecking || !isAuthenticated) return
+    
+    const fetchTickets = async () => {
+      try {
+        setLoading(true)
+        const response = await getTickets()
+        setTickets((response as any).result ?? [])
+      } catch (err) {
+        const errorMessage = handleError(err, '승차권 목록 조회 중 오류가 발생했습니다.', false)
+        setError(errorMessage)
+        setTickets([])
+      } finally {
+        setLoading(false)
+      }
+    }
 
-  const getTrainTypeColor = (trainType: string) => {
-    switch (trainType) {
+    fetchTickets()
+  }, [isChecking, isAuthenticated])
+
+  const getTrainTypeColor = (trainName: string) => {
+    switch (trainName) {
       case "KTX":
+      case "KTX-산천":
         return "bg-blue-600 text-white"
       case "ITX-새마을":
         return "bg-green-600 text-white"
@@ -54,29 +80,25 @@ export default function PurchasedTicketsPage() {
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "valid":
-        return "bg-green-600 text-white"
-      case "used":
-        return "bg-gray-600 text-white"
-      case "expired":
-        return "bg-red-600 text-white"
+  const getCarTypeName = (carType: string) => {
+    switch (carType) {
+      case "STANDARD":
+        return "일반실"
+      case "FIRST_CLASS":
+        return "특실"
       default:
-        return "bg-gray-600 text-white"
+        return carType
     }
   }
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "valid":
-        return "사용가능"
-      case "used":
-        return "사용완료"
-      case "expired":
-        return "기간만료"
+  const getSeatTypeName = (seatType: string) => {
+    switch (seatType) {
+      case "WINDOW":
+        return "창가"
+      case "AISLE":
+        return "통로"
       default:
-        return "알 수 없음"
+        return seatType
     }
   }
 
@@ -84,22 +106,50 @@ export default function PurchasedTicketsPage() {
     return price.toLocaleString() + "원"
   }
 
-  const handleDownloadTicket = (ticketId: string) => {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return format(date, "yyyy년 MM월 dd일(EEEE)", { locale: ko })
+  }
+
+  const formatTime = (timeString: string) => {
+    return timeString.substring(0, 5) // "HH:mm" 형식으로 변환
+  }
+
+  const handleDownloadTicket = (ticketId: number) => {
     // 실제로는 PDF 다운로드 기능 구현
     alert("승차권을 다운로드합니다.")
   }
 
-  const handleShowQR = (ticketId: string) => {
+  const handleShowQR = (ticketId: number) => {
     // 실제로는 QR 코드 모달 표시
     alert("QR 코드를 표시합니다.")
+  }
+
+  // reservationId로 그룹화
+  const groupedTickets = tickets.reduce<Record<number, Ticket[]>>((acc, ticket) => {
+    if (!acc[ticket.reservationId]) acc[ticket.reservationId] = []
+    acc[ticket.reservationId].push(ticket)
+    return acc
+  }, {})
+
+  // 소요 시간 계산 함수
+  const getDuration = (departure: string, arrival: string) => {
+    // "HH:mm:ss" 형식
+    const dep = parse(departure, "HH:mm:ss", new Date())
+    const arr = parse(arrival, "HH:mm:ss", new Date())
+    let diff = differenceInMinutes(arr, dep)
+    if (diff < 0) diff += 24 * 60 // 자정 넘는 경우
+    const hours = Math.floor(diff / 60)
+    const minutes = diff % 60
+    return `${hours > 0 ? hours + "시간 " : ""}${minutes}분`
   }
 
   // 로그인 상태 확인 중이거나 인증되지 않은 경우 로딩 표시
   if (isChecking || !isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
         <Header />
-        <div className="container mx-auto px-4 py-16 text-center">
+        <div className="flex-1 container mx-auto px-4 py-16 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">인증을 확인하고 있습니다...</p>
         </div>
@@ -108,12 +158,26 @@ export default function PurchasedTicketsPage() {
     )
   }
 
+  // 로딩 중인 경우
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="flex-1 container mx-auto px-4 py-16 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">승차권을 불러오고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
       <Header />
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Page Title */}
           <div className="text-center mb-8">
@@ -127,18 +191,14 @@ export default function PurchasedTicketsPage() {
             </div>
 
             <div className="space-y-6">
-              {/* Info Message */}
-              <Card className="bg-gray-50 border-gray-200">
-                <CardContent className="p-4">
-                  <p className="text-sm text-gray-700">
-                    전달한 승차권을 확인하시려면{" "}
-                    <Link href="/ticket/booking" className="text-blue-600 hover:underline">
-                      여기
-                    </Link>
-                    를 클릭하세요.
-                  </p>
-                </CardContent>
-              </Card>
+              {/* Error Message */}
+              {error && (
+                <Card className="border-red-200 bg-red-50">
+                  <CardContent className="p-4">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Ticket List or Empty State */}
               {tickets.length === 0 ? (
@@ -181,93 +241,111 @@ export default function PurchasedTicketsPage() {
                   </CardContent>
                 </Card>
               ) : (
-                tickets.map((ticket) => (
-                  <Card key={ticket.id} className="border-blue-200">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center space-x-3">
-                          <Badge className={`${getTrainTypeColor(ticket.trainType)} px-3 py-1`}>
-                            {ticket.trainType}
-                          </Badge>
-                          <span className="text-lg font-bold">{ticket.trainNumber}</span>
-                          <span className="text-gray-600">{ticket.date}</span>
-                          <Badge className={`${getStatusColor(ticket.status)} px-2 py-1`}>
-                            {getStatusText(ticket.status)}
-                          </Badge>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xl font-bold text-blue-600">{formatPrice(ticket.price)}</div>
-                          <div className="text-xs text-gray-500">승차권번호: {ticket.ticketNumber}</div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        {/* Route Info */}
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            운행 정보
-                          </h4>
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium">{ticket.departureStation}</span>
-                              <ArrowRight className="h-3 w-3 text-gray-400" />
-                              <span className="font-medium">{ticket.arrivalStation}</span>
+                Object.values(groupedTickets).map((group) => {
+                  const first = group[0]
+                  return (
+                    <Card key={first.reservationId} className="border-2 border-blue-300 bg-gradient-to-r from-blue-50 to-white shadow-lg">
+                      <CardContent className="p-6">
+                        {/* 승차권 헤더 */}
+                        <div className="border-b-2 border-blue-200 pb-4 mb-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                                <Train className="h-6 w-6 text-white" />
+                              </div>
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <Badge className={`${getTrainTypeColor(first.trainName)} px-3 py-1 text-sm font-bold`}>
+                                    {first.trainName}
+                                  </Badge>
+                                  <span className="text-xl font-bold text-gray-900">{first.trainNumber}</span>
+                                </div>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  {formatDate(first.operationDate)}
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-sm text-gray-600">
-                              {ticket.departureTime} ~ {ticket.arrivalTime}
+                            <div className="text-right">
                             </div>
                           </div>
                         </div>
 
-                        {/* Seat Info */}
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-2">좌석 정보</h4>
-                          <div className="space-y-1">
-                            <div className="text-sm">{ticket.seatClass}</div>
-                            <div className="text-sm text-gray-600">
-                              {ticket.carNumber}호차 {ticket.seatNumber}
+                        {/* 승차권 본문 */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* 운행 정보 */}
+                          <div className="bg-white rounded-lg p-4 border border-gray-200">
+                            <h4 className="font-bold text-gray-900 mb-3 flex items-center">
+                              <MapPin className="h-4 w-4 mr-2 text-blue-600" />
+                              운행 정보
+                            </h4>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="text-center flex-1">
+                                  <div className="text-2xl font-bold text-blue-600">{formatTime(first.departureTime)}</div>
+                                  <div className="text-sm text-gray-600 mt-1">{first.departureStationName}</div>
+                                </div>
+                                <div className="flex items-center mx-4">
+                                  <div className="w-16 h-0.5 bg-blue-300"></div>
+                                  <ArrowRight className="h-4 w-4 text-blue-400 mx-1" />
+                                  <div className="w-16 h-0.5 bg-blue-300"></div>
+                                </div>
+                                <div className="text-center flex-1">
+                                  <div className="text-2xl font-bold text-blue-600">{formatTime(first.arrivalTime)}</div>
+                                  <div className="text-sm text-gray-600 mt-1">{first.arrivalStationName}</div>
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <span className="text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded-full">
+                                  소요시간 {getDuration(first.departureTime, first.arrivalTime)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                                                     {/* 좌석 정보 */}
+                           <div className="bg-white rounded-lg p-4 border border-gray-200">
+                             <h4 className="font-bold text-gray-900 mb-3 flex items-center">
+                               <User className="h-4 w-4 mr-2 text-green-600" />
+                               좌석 정보
+                             </h4>
+                             <div className="space-y-2">
+                               {(() => {
+                                 // 호차별로 좌석 그룹화
+                                 const seatsByCar = group.reduce<Record<number, string[]>>((acc, ticket) => {
+                                   if (!acc[ticket.trainCarNumber]) acc[ticket.trainCarNumber] = []
+                                   acc[ticket.trainCarNumber].push(`${ticket.seatRow}${ticket.seatColumn}`)
+                                   return acc
+                                 }, {})
+                                 
+                                 return Object.entries(seatsByCar).map(([carNumber, seats]) => (
+                                   <div key={carNumber} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                     <div className="flex items-center space-x-2">
+                                       <Badge variant="outline" className="text-xs">
+                                         {getCarTypeName(group[0].trainCarType)}
+                                       </Badge>
+                                       <span className="font-medium text-gray-900">
+                                         {carNumber}호차({seats.join(', ')})
+                                       </span>
+                                     </div>
+                                   </div>
+                                 ))
+                               })()}
+                             </div>
+                           </div>
+                        </div>
+
+                        {/* 승차권 하단 정보 */}
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <div className="flex items-center space-x-4">
+                              <span>승차권 발권완료</span>
                             </div>
                           </div>
                         </div>
-
-                        {/* Purchase Info */}
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            구매 정보
-                          </h4>
-                          <div className="space-y-1">
-                            <div className="text-sm">{format(ticket.purchaseDate, "yyyy.MM.dd", { locale: ko })}</div>
-                            <div className="text-sm text-gray-600">결제완료</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex justify-end space-x-2 pt-4 border-t">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadTicket(ticket.id)}
-                          disabled={ticket.status === "expired"}
-                        >
-                          <Download className="h-4 w-4 mr-1" />
-                          다운로드
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleShowQR(ticket.id)}
-                          disabled={ticket.status !== "valid"}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          <QrCode className="h-4 w-4 mr-1" />
-                          QR코드
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                      </CardContent>
+                    </Card>
+                  )
+                })
               )}
             </div>
 
