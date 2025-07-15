@@ -602,21 +602,43 @@ export default function PaymentPage() {
           // 토큰이 만료되지 않았는지 확인
           const currentTime = Math.floor(Date.now() / 1000);
           if (payload.exp && payload.exp > currentTime) {
-            // 실제 JWT 토큰에서 사용자 정보 설정
-            const loginData = {
-              isLoggedIn: true,
-              userId:
-                parseInt(payload.memberId) || parseInt(payload.userId) || 1,
-              username: payload.sub || "Unknown",
-              memberNo: payload.sub || "Unknown",
-              email: payload.email || "unknown@raillo.com",
-              exp: payload.exp,
-            };
-
-            setLoginInfo(loginData);
-            setIsLoggedIn(true);
-            // localStorage에도 저장하여 다른 컴포넌트에서 사용 가능하도록 함
-            localStorage.setItem('loginInfo', JSON.stringify(loginData));
+            // 사용자 정보 API 호출하여 실제 이름 가져오기
+            try {
+              const { getMyInfo } = await import('@/lib/api/user');
+              const userInfoResponse = await getMyInfo();
+              
+              if (userInfoResponse.result) {
+                const userInfo = userInfoResponse.result;
+                const loginData = {
+                  isLoggedIn: true,
+                  userId: payload.sub || "guest_user",
+                  username: userInfo.name || "Unknown",
+                  memberNo: payload.sub || "Unknown",
+                  email: userInfo.memberDetailInfo?.email || "unknown@raillo.com",
+                  phoneNumber: userInfo.phoneNumber || "",
+                  exp: payload.exp,
+                };
+                
+                setLoginInfo(loginData);
+                setIsLoggedIn(true);
+                localStorage.setItem('loginInfo', JSON.stringify(loginData));
+              }
+            } catch (error) {
+              console.error('사용자 정보 조회 실패:', error);
+              // API 호출 실패 시 기본값 사용
+              const loginData = {
+                isLoggedIn: true,
+                userId: payload.sub || "guest_user",
+                username: payload.sub || "Unknown",
+                memberNo: payload.sub || "Unknown",
+                email: payload.email || "unknown@raillo.com",
+                exp: payload.exp,
+              };
+              
+              setLoginInfo(loginData);
+              setIsLoggedIn(true);
+              localStorage.setItem('loginInfo', JSON.stringify(loginData));
+            }
           } else {
             // 토큰이 만료되었으면 로그아웃
             localStorage.removeItem("accessToken");

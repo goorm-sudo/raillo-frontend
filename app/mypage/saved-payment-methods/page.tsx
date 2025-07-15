@@ -428,7 +428,7 @@ export default function SavedPaymentMethodsPage() {
           
           setLoginInfo({
             isLoggedIn: true,
-            userId: payload.memberId || 1,
+            userId: payload.sub || "guest_user", // memberNo를 userId로 사용
             username: payload.sub || 'TEST001',
             memberNo: payload.sub || 'TEST001',
             email: 'test@example.com',

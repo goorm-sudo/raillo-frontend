@@ -144,7 +144,7 @@ export default function PaymentHistoryPage() {
             // 실제 JWT 토큰에서 사용자 정보 설정
             const loginData = {
               isLoggedIn: true,
-              userId: parseInt(payload.memberId) || parseInt(payload.userId) || 1,
+              userId: payload.sub || "guest_user", // memberNo를 userId로 사용
               username: payload.sub || "Unknown",
               memberNo: payload.sub || "Unknown",
               email: payload.email || "unknown@raillo.com",
@@ -193,7 +193,7 @@ export default function PaymentHistoryPage() {
             if (payload.exp && payload.exp > currentTime) {
               const tempLoginData = {
                 isLoggedIn: true,
-                userId: parseInt(payload.memberId) || parseInt(payload.userId) || 1,
+                userId: payload.sub || "guest_user", // memberNo를 userId로 사용
                 username: payload.sub || "Unknown",
                 memberNo: payload.sub || "Unknown",
                 email: payload.email || "unknown@raillo.com",
