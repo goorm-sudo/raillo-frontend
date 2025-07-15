@@ -240,7 +240,7 @@ export default function PaymentPage() {
   };
 
   // 로그인 정보 확인 및 설정
-  const checkLoginStatus = () => {
+  const checkLoginStatus = async () => {
     try {
       const accessToken = localStorage.getItem("accessToken");
 
