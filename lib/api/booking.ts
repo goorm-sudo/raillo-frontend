@@ -116,7 +116,7 @@ export const getReservationList = async () => {
 
 // 승차권 조회 함수
 export const getTickets = async () => {
-  return api.get<TicketResponse>("/api/v1/booking/ticket")
+  return api.get<TicketResponse>("/booking/ticket")
 }
 
  
