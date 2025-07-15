@@ -763,9 +763,20 @@ export default function TrainSearchPage() {
       return
     }
 
-    // 역 id 추출
-    const departureStationId = stationUtils.getStationId(departureStation)
-    const arrivalStationId = stationUtils.getStationId(arrivalStation)
+    // 왕복 예매에서 오는 열차인지 확인
+    const isInboundTrain = isRoundtrip && outboundReserved && selectedTrain.id.startsWith('inbound_')
+    
+    // 역 id 추출 - 왕복에서 오는 열차인 경우 출발역과 도착역을 바꿔서 사용
+    let departureStationId, arrivalStationId
+    if (isInboundTrain) {
+      // 오는 열차: 출발역과 도착역이 바뀜
+      departureStationId = stationUtils.getStationId(arrivalStation) // 원래 도착역이 출발역이 됨
+      arrivalStationId = stationUtils.getStationId(departureStation) // 원래 출발역이 도착역이 됨
+    } else {
+      // 가는 열차 또는 편도: 원래대로
+      departureStationId = stationUtils.getStationId(departureStation)
+      arrivalStationId = stationUtils.getStationId(arrivalStation)
+    }
 
     if (!departureStationId || !arrivalStationId) {
       alert("역 정보를 찾을 수 없습니다.")
@@ -929,8 +940,19 @@ export default function TrainSearchPage() {
     
     setLoadingCars(true)
     try {
-      const departureStationId = stationUtils.getStationId(searchData.departureStation)
-      const arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
+      // 왕복 예매에서 오는 열차인지 확인
+      const isInboundTrain = isRoundtrip && outboundReserved && selectedTrain?.id.startsWith('inbound_')
+      
+      let departureStationId, arrivalStationId
+      if (isInboundTrain) {
+        // 오는 열차: 출발역과 도착역이 바뀜
+        departureStationId = stationUtils.getStationId(searchData.arrivalStation)
+        arrivalStationId = stationUtils.getStationId(searchData.departureStation)
+      } else {
+        // 가는 열차 또는 편도: 원래대로
+        departureStationId = stationUtils.getStationId(searchData.departureStation)
+        arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
+      }
       
       if (!departureStationId || !arrivalStationId) {
         console.error("역 정보를 찾을 수 없습니다.")
@@ -966,8 +988,19 @@ export default function TrainSearchPage() {
     
     setLoadingSeats(true)
     try {
-      const departureStationId = stationUtils.getStationId(searchData.departureStation)
-      const arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
+      // 왕복 예매에서 오는 열차인지 확인
+      const isInboundTrain = isRoundtrip && outboundReserved && selectedTrain?.id.startsWith('inbound_')
+      
+      let departureStationId, arrivalStationId
+      if (isInboundTrain) {
+        // 오는 열차: 출발역과 도착역이 바뀜
+        departureStationId = stationUtils.getStationId(searchData.arrivalStation)
+        arrivalStationId = stationUtils.getStationId(searchData.departureStation)
+      } else {
+        // 가는 열차 또는 편도: 원래대로
+        departureStationId = stationUtils.getStationId(searchData.departureStation)
+        arrivalStationId = stationUtils.getStationId(searchData.arrivalStation)
+      }
       
       if (!departureStationId || !arrivalStationId) {
         console.error("역 정보를 찾을 수 없습니다.")
