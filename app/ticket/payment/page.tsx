@@ -114,6 +114,827 @@ export default function PaymentPage() {
     return null
   }
 
+<<<<<<< HEAD
+=======
+  // 은행명을 은행코드로 변환하는 함수
+  const getBankCode = (bankName: string): string => {
+    const bankNameToCode: { [key: string]: string } = {
+      국민은행: "004",
+      신한은행: "088",
+      우리은행: "020",
+      하나은행: "081",
+      농협은행: "011",
+      부산은행: "032",
+      대구은행: "031",
+      광주은행: "034",
+      전북은행: "037",
+      경남은행: "039",
+      제주은행: "035",
+      카카오뱅크: "090",
+      케이뱅크: "089",
+      토스뱅크: "092",
+      IBK기업은행: "003",
+    };
+    return bankNameToCode[bankName] || "004"; // 기본값: 국민은행
+  };
+
+  // 저장된 결제 수단 조회
+  const fetchSavedPaymentMethods = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!isLoggedIn || !token || !loginInfo) {
+        // 비회원이거나 로그인 정보가 없어 저장된 결제수단 조회를 건너뜁니다
+        setSavedPaymentMethods([]);
+        return;
+      }
+
+
+      // 올바른 API 호출 (JWT에서 memberId 자동 추출)
+      const response = await savedPaymentMethodApi.getSavedPaymentMethods();
+
+
+      // API 응답 구조에 따라 데이터 추출
+      const methods = response.result || response.data || response || [];
+      setSavedPaymentMethods(Array.isArray(methods) ? methods : []);
+    } catch (error) {
+      // 저장된 결제수단 조회 에러
+      setSavedPaymentMethods([]);
+    }
+  };
+
+  // 마일리지 계산 함수
+  const calculateFinalAmount = (usedMileage: number) => {
+    const discountAmount = usedMileage; // 1마일리지 = 1원
+    const finalAmount = Math.max(0, reservationInfo.price - discountAmount);
+    setFinalPayableAmount(finalAmount);
+    return finalAmount;
+  };
+
+  // 마일리지 사용량 변경 핸들러 (디바운싱 포함)
+  const handleMileageChange = (value: string, immediate = false) => {
+    // 입력 필드 값은 즉시 업데이트
+    setMileageInputValue(value);
+
+    // 디바운스 타이머 초기화
+    if (mileageDebounceTimer) {
+      clearTimeout(mileageDebounceTimer);
+    }
+
+    // 즉시 실행 또는 디바운싱
+    const applyMileageChange = () => {
+      if (value === "") {
+        setMileageToUse(0);
+        calculateFinalAmount(0);
+        setShowMileageWarning(false);
+        return;
+      }
+
+      // 숫자가 아닌 문자(-, +, e 등) 제거하고 양수만 허용
+      const cleanValue = value.replace(/[^0-9]/g, "").replace(/^0+/, "") || "";
+      if (cleanValue === "") {
+        setMileageToUse(0);
+        calculateFinalAmount(0);
+        setShowMileageWarning(false);
+        return;
+      }
+
+      const numValue = parseInt(cleanValue) || 0;
+
+      // 음수 방지 - 0보다 작으면 0으로 설정
+      if (numValue < 0) {
+        setMileageToUse(0);
+        calculateFinalAmount(0);
+        setShowMileageWarning(false);
+        return;
+      }
+
+      // 최대 사용 가능 마일리지 제한 (보유 마일리지와 최대 사용 가능 중 작은 값)
+      const maxAllowed = Math.min(availableMileage, maxUsableMileage);
+      const clampedValue = Math.min(numValue, maxAllowed);
+
+      // 100% 사용 가능하므로 경고 표시하지 않음
+      setShowMileageWarning(false);
+
+      // 사용자가 최대값을 초과하려 할 때 경고 메시지
+      if (numValue > maxAllowed) {
+        console.warn(
+          `마일리지 최대 사용량 초과: 요청=${numValue}, 최대=${maxAllowed}`,
+        );
+        // 자동으로 최대값으로 조정
+        setMileageToUse(maxAllowed);
+        setMileageInputValue(maxAllowed.toString());
+        calculateFinalAmount(maxAllowed);
+      } else {
+        setMileageToUse(clampedValue);
+        calculateFinalAmount(clampedValue);
+      }
+    };
+
+    if (immediate) {
+      applyMileageChange();
+    } else {
+      // 300ms 디바운싱
+      const timer = setTimeout(applyMileageChange, 300);
+      setMileageDebounceTimer(timer);
+    }
+  };
+
+  // 로그인 정보 확인 및 설정
+  const checkLoginStatus = () => {
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+
+      if (!accessToken) {
+        setIsLoggedIn(false);
+        setLoginInfo(null);
+        localStorage.removeItem("loginInfo");
+        return;
+      }
+
+      // JWT 토큰에서 사용자 정보 추출
+      try {
+        const tokenParts = accessToken.split(".");
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]));
+
+          // 토큰이 만료되지 않았는지 확인
+          const currentTime = Math.floor(Date.now() / 1000);
+          if (payload.exp && payload.exp > currentTime) {
+            // 사용자 정보 API 호출하여 실제 이름 가져오기
+            try {
+              const { getMyInfo } = await import('@/lib/api/user');
+              const userInfoResponse = await getMyInfo();
+              
+              if (userInfoResponse.result) {
+                const userInfo = userInfoResponse.result;
+                const loginData = {
+                  isLoggedIn: true,
+                  userId: payload.sub || "guest_user",
+                  username: userInfo.name || "Unknown",
+                  memberNo: payload.sub || "Unknown",
+                  email: userInfo.memberDetailInfo?.email || "unknown@raillo.com",
+                  phoneNumber: userInfo.phoneNumber || "",
+                  exp: payload.exp,
+                };
+                
+                setLoginInfo(loginData);
+                setIsLoggedIn(true);
+                localStorage.setItem('loginInfo', JSON.stringify(loginData));
+              }
+            } catch (error) {
+              console.error('사용자 정보 조회 실패:', error);
+              // API 호출 실패 시 기본값 사용
+              const loginData = {
+                isLoggedIn: true,
+                userId: payload.sub || "guest_user",
+                username: payload.sub || "Unknown",
+                memberNo: payload.sub || "Unknown",
+                email: payload.email || "unknown@raillo.com",
+                exp: payload.exp,
+              };
+              
+              setLoginInfo(loginData);
+              setIsLoggedIn(true);
+              localStorage.setItem('loginInfo', JSON.stringify(loginData));
+            }
+          } else {
+            // 토큰이 만료되었으면 로그아웃
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("refreshToken");
+            localStorage.removeItem("loginInfo");
+            setIsLoggedIn(false);
+            setLoginInfo(null);
+          }
+        } else {
+          throw new Error("잘못된 토큰 형식");
+        }
+      } catch (error) {
+        console.error("JWT 토큰 파싱 에러:", error);
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("loginInfo");
+        setIsLoggedIn(false);
+        setLoginInfo(null);
+      }
+    } catch (error) {
+      console.error("로그인 상태 확인 에러:", error);
+      setIsLoggedIn(false);
+      setLoginInfo(null);
+    }
+  };
+
+  // mileageToUse가 변경될 때 입력 필드 값도 업데이트
+  useEffect(() => {
+    if (mileageToUse === 0) {
+      setMileageInputValue("");
+    } else {
+      setMileageInputValue(mileageToUse.toString());
+    }
+  }, [mileageToUse]);
+
+  // 마일리지 정보 조회
+  const fetchMileageInfo = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token || !isLoggedIn) {
+        console.warn("비회원이거나 토큰이 없어 마일리지 조회를 건너뜁니다");
+        setAvailableMileage(0);
+        setMaxUsableMileage(0);
+        return;
+      }
+
+      const response = await mileageApi.getMileageBalance();
+
+      // 마일리지 API 응답
+      if (response && response.result) {
+        // response.result가 직접 balance를 포함할 수 있음
+        let balance = 0;
+        
+        // 디버깅을 위한 로그
+        console.log("마일리지 API 응답:", response.result);
+        
+        if (typeof response.result === 'number') {
+          // 단순 숫자 응답인 경우
+          balance = response.result;
+        } else if (response.result.balance !== undefined) {
+          // balance 필드가 있는 경우
+          balance = response.result.balance;
+        } else if (response.result.currentBalance !== undefined) {
+          // currentBalance 필드가 있는 경우
+          balance = response.result.currentBalance;
+        }
+
+        const safeBalance = isNaN(balance) ? 0 : balance || 0;
+        
+        // 100% 결제 가능 - 결제 금액과 보유 마일리지 중 작은 값
+        const maxUsableByPrice = reservationInfo.price;
+        const maxUsableByBalance = safeBalance;
+        const maxUsable = Math.min(maxUsableByPrice, maxUsableByBalance);
+
+        setAvailableMileage(safeBalance);
+        setMaxUsableMileage(maxUsable);
+      } else {
+        // 응답에 result가 없는 경우
+        setAvailableMileage(0);
+        setMaxUsableMileage(0);
+      }
+    } catch (error) {
+      // 마일리지 조회 실패
+      setAvailableMileage(0);
+      setMaxUsableMileage(0);
+    }
+  };
+
+  // URL 파라미터 감지 및 sessionStorage 업데이트
+  useEffect(() => {
+    if (searchParams) {
+      const urlReservationId = searchParams.get('reservationId');
+      const urlReservationNumber = searchParams.get('reservationNumber');
+      
+      if (urlReservationId) {
+        // URL에서 reservationId 감지
+        sessionStorage.setItem('currentReservationId', urlReservationId);
+      }
+      
+      if (urlReservationNumber) {
+        // URL에서 reservationNumber 감지
+        sessionStorage.setItem('currentReservationNumber', urlReservationNumber);
+      }
+    }
+  }, [searchParams]);
+
+  // 컴포넌트 마운트 시 로그인 상태 확인 및 데이터 조회
+  useEffect(() => {
+    // localStorage에서 토큰을 먼저 확인
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      // 토큰이 있으면 로그인 상태로 간주
+      checkLoginStatus();
+    } else {
+      // 토큰이 없으면 비로그인 상태로 즉시 설정
+      setIsLoggedIn(false);
+      setLoginInfo(null);
+      setIsInitialLoading(false);
+    }
+  }, []);
+
+  // 로그인 상태 확인 후 비회원 안내 표시
+  useEffect(() => {
+    // 초기 로딩이 완료된 후에만 팝업 표시
+    const timer = setTimeout(() => {
+      if (!isInitialLoading && !isLoggedIn) {
+        setShowGuestNotice(true);
+      } else {
+        setShowGuestNotice(false);
+      }
+      setIsInitialLoading(false); // 초기 로딩 완료
+    }, 300); // 스켈레톤 표시를 위한 최소 시간
+
+    return () => clearTimeout(timer);
+  }, [isLoggedIn, isInitialLoading]);
+
+  // 로그인 상태 변경 시 마일리지 조회
+  useEffect(() => {
+    if (isLoggedIn && loginInfo) {
+      fetchMileageInfo();
+      fetchSavedPaymentMethods();
+    }
+  }, [isLoggedIn, loginInfo]);
+
+  // 저장된 결제수단 상태 변경 감지
+  useEffect(() => {
+    if (savedPaymentMethods && savedPaymentMethods.length > 0) {
+      // 기본 결제수단이 있는지 확인하고 설정
+      const defaultMethod = savedPaymentMethods.find(
+        (method) => method.isDefault,
+      );
+      if (defaultMethod) {
+        setPaymentMethod("saved");
+        if (defaultMethod.paymentMethodType === "CREDIT_CARD") {
+          setSelectedSavedCard(defaultMethod.id);
+        } else if (defaultMethod.paymentMethodType === "BANK_ACCOUNT") {
+          setSelectedSavedAccount(defaultMethod.id);
+        }
+      }
+    }
+  }, [savedPaymentMethods]);
+
+  // 원본 결제수단 조회 (실제 카드번호 포함)
+  const fetchRawPaymentMethod = async (paymentMethodId: number) => {
+    try {
+      if (!isLoggedIn || !loginInfo) {
+        throw new Error("로그인이 필요합니다.");
+      }
+
+      const token = localStorage.getItem("accessToken");
+
+      // JWT 토큰에서 memberId를 자동으로 추출하므로 파라미터 제거
+      const response = await fetch(
+        `http://localhost:8080/api/v1/saved-payment-methods/${paymentMethodId}/raw`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("원본 결제수단 조회 실패:", error);
+      throw error;
+    }
+  };
+
+  // 저장된 카드 선택 핸들러 (신용카드 탭 전용)
+  const handleSavedCardChange = async (methodId: string) => {
+    if (methodId === "new") {
+      // 새 카드 입력 선택
+      setUseSavedCard(false);
+      setSelectedSavedCard(null);
+
+      // 카드 필드 초기화
+      setCardNumber1("");
+      setCardNumber2("");
+      setCardNumber3("");
+      setCardNumber4("");
+      setExpiryMonth("");
+      setExpiryYear("2025");
+      setCvv("");
+      setCardPassword("");
+      setCardHolderName("");
+      setCardAlias("");
+    } else {
+      // 저장된 카드 선택
+      const methodIdNum = parseInt(methodId);
+      const method = savedPaymentMethods.find(
+        (m) => m.id === methodIdNum && m.paymentMethodType === "CREDIT_CARD",
+      );
+      if (!method) return;
+
+      setUseSavedCard(true);
+      setSelectedSavedCard(methodIdNum);
+
+      // 원본 데이터 조회
+      const rawMethod = await fetchRawPaymentMethod(methodIdNum);
+
+      if (rawMethod && rawMethod.cardNumber) {
+        // 원본 카드 번호를 4자리씩 분할하여 입력
+        const cardNumber = rawMethod.cardNumber.replace(/[^0-9]/g, "");
+        setCardNumber1(cardNumber.slice(0, 4));
+        setCardNumber2(cardNumber.slice(4, 8));
+        setCardNumber3(cardNumber.slice(8, 12));
+        setCardNumber4(cardNumber.slice(12, 16));
+        setExpiryMonth(rawMethod.cardExpiryMonth || "");
+        setExpiryYear(rawMethod.cardExpiryYear || "2025");
+        // 카드 소유자명과 별칭 설정
+        setCardHolderName(rawMethod.cardHolderName || "");
+        setCardAlias(rawMethod.alias || "");
+        // 저장된 카드는 CVC와 비밀번호 재입력 불필요
+        setCvv("123"); // 3자리 더미값으로 수정
+        setCardPassword("1234"); // 더미값 설정
+      } else {
+        // 원본 조회 실패 시 마스킹된 데이터 사용
+        if (method.cardNumber) {
+          const cardNumber = method.cardNumber.replace(/[^0-9]/g, "");
+          setCardNumber1(cardNumber.slice(0, 4));
+          setCardNumber2(cardNumber.slice(4, 8));
+          setCardNumber3(cardNumber.slice(8, 12));
+          setCardNumber4(cardNumber.slice(12, 16));
+          setExpiryMonth(method.cardExpiryMonth || "");
+          setExpiryYear(method.cardExpiryYear || "2025");
+          // 카드 소유자명과 별칭 설정 (마스킹된 데이터에서)
+          setCardHolderName(method.cardHolderName || "");
+          setCardAlias(method.alias || "");
+          setCvv("123");
+          setCardPassword("1234");
+        }
+      }
+    }
+  };
+
+  // 저장된 계좌 선택 핸들러 (내 통장 탭 전용)
+  const handleSavedAccountChange = (methodId: string) => {
+    if (methodId === "new") {
+      // 새 계좌 입력 선택
+      setUseSavedAccount(false);
+      setSelectedSavedAccount(null);
+
+      // 통장 필드 초기화
+      setSelectedBankForAccount("");
+      setBankAccountNumber("");
+      setBankPassword("");
+      setIsAccountVerified(false);
+    } else {
+      // 저장된 계좌 선택
+      const methodIdNum = parseInt(methodId);
+      const method = savedPaymentMethods.find(
+        (m) => m.id === methodIdNum && m.paymentMethodType === "BANK_ACCOUNT",
+      );
+      if (!method) return;
+
+      setUseSavedAccount(true);
+      setSelectedSavedAccount(methodIdNum);
+
+      // 은행 코드를 은행명으로 변환
+      const bankCodes: { [key: string]: string } = {
+        "004": "국민은행",
+        "088": "신한은행",
+        "020": "우리은행",
+        "081": "하나은행",
+        "011": "농협은행",
+        "032": "부산은행",
+        "031": "대구은행",
+        "034": "광주은행",
+        "037": "전북은행",
+        "039": "경남은행",
+        "035": "제주은행",
+        "090": "카카오뱅크",
+        "089": "케이뱅크",
+        "092": "토스뱅크",
+        "003": "IBK기업은행",
+      };
+
+      const bankName =
+        bankCodes[method.bankCode || ""] || method.bankCode || "";
+      setSelectedBankForAccount(bankName);
+      setBankAccountNumber(method.accountNumber || "");
+      // 저장된 계좌는 비밀번호 재입력 불필요
+      setBankPassword("1234"); // 더미값 설정
+      setIsAccountVerified(true); // 저장된 계좌는 검증 완료로 처리
+
+      // 저장된 계좌 정보를 savedAccountInfo에 설정
+      const accountInfo: BankInfo = {
+        bankName: bankName,
+        accountNumber: (method.accountNumber || "").replace(
+          /(\d{6})(\d{2})(\d+)/,
+          "$1-$2-$3",
+        ),
+        accountHolder: method.accountHolderName || "홍길동",
+      };
+      setSavedAccountInfo(accountInfo);
+    }
+  };
+
+  // 유효성 검사 함수들
+  const validateCardNumber = () => {
+    const fullCardNumber =
+      cardNumber1 + cardNumber2 + cardNumber3 + cardNumber4;
+    if (fullCardNumber.length !== 16) {
+      setErrors((prev) => ({
+        ...prev,
+        cardNumber: "카드번호는 16자리를 입력해주세요.",
+      }));
+      return false;
+    }
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.cardNumber;
+      return newErrors;
+    });
+    return true;
+  };
+
+  const validateExpiryDate = () => {
+    if (!expiryMonth || !expiryYear) {
+      setErrors((prev) => ({ ...prev, expiry: "유효기간을 선택해주세요." }));
+      return false;
+    }
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    const expYear = parseInt(expiryYear);
+    const expMonth = parseInt(expiryMonth);
+
+    if (
+      expYear < currentYear ||
+      (expYear === currentYear && expMonth < currentMonth)
+    ) {
+      setErrors((prev) => ({
+        ...prev,
+        expiry: "유효한 만료일을 입력해주세요.",
+      }));
+      return false;
+    }
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.expiry;
+      return newErrors;
+    });
+    return true;
+  };
+
+  const validateCVV = () => {
+    if (cvv.length !== 3) {
+      setErrors((prev) => ({
+        ...prev,
+        cvv: "CVC/CVV는 3자리를 입력해주세요.",
+      }));
+      return false;
+    }
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.cvv;
+      return newErrors;
+    });
+    return true;
+  };
+
+  const validateCardPassword = () => {
+    if (cardPassword.length !== 4) {
+      setErrors((prev) => ({
+        ...prev,
+        cardPassword: "카드 비밀번호 4자리를 입력해주세요.",
+      }));
+      return false;
+    }
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.cardPassword;
+      return newErrors;
+    });
+    return true;
+  };
+
+  const validatePhoneNumber = () => {
+    let phoneToCheck = "";
+
+    // 결제 방식에 따라 검증할 휴대폰 번호 결정
+    if (paymentMethod === "card") {
+      phoneToCheck = cardPhoneNumber;
+    } else if (paymentMethod === "bank") {
+      phoneToCheck = bankPhoneNumber;
+    } else if (paymentMethod === "simple") {
+      phoneToCheck = simplePhoneNumber;
+    } else if (paymentMethod === "transfer") {
+      phoneToCheck = transferPhoneNumber;
+    } else {
+      phoneToCheck = receiptPhoneNumber; // 기본값으로 현금영수증 번호 사용
+    }
+
+    // 전화번호가 없거나 길이가 부족한 경우
+    if (!phoneToCheck || phoneToCheck.length < 7) {
+      setErrors((prev) => ({
+        ...prev,
+        phoneNumber: "전화번호를 입력해주세요.",
+      }));
+      return false;
+    }
+
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.phoneNumber;
+      return newErrors;
+    });
+    return true;
+  };
+
+  const validateAgreements = () => {
+    if (!agreeTerms) {
+      setErrors((prev) => ({
+        ...prev,
+        agreements: "결제 서비스 이용약관에 동의해주세요.",
+      }));
+      return false;
+    }
+    if (!agreePersonalInfo) {
+      setErrors((prev) => ({
+        ...prev,
+        agreements: "개인정보 수집 및 이용에 동의해주세요.",
+      }));
+      return false;
+    }
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.agreements;
+      return newErrors;
+    });
+    return true;
+  };
+
+  const validateBankAccount = () => {
+    if (!selectedBankForAccount) {
+      setErrors((prev) => ({ ...prev, bankSelection: "은행을 선택해주세요." }));
+      return false;
+    }
+    if (bankAccountNumber.length < 10) {
+      setErrors((prev) => ({
+        ...prev,
+        bankAccount: "올바른 계좌번호를 입력해주세요.",
+      }));
+      return false;
+    }
+    // 계좌 인증 시에는 비밀번호 체크하지 않음 (인증 API에서 처리)
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.bankSelection;
+      delete newErrors.bankAccount;
+      delete newErrors.bankPassword;
+      return newErrors;
+    });
+    return true;
+  };
+
+  // 비회원 정보 유효성 검사
+  const validateNonMemberInfo = () => {
+    if (isLoggedIn) return true; // 로그인 상태면 검증 스킵
+
+    const newErrors: any = {};
+
+    if (!nonMemberInfo.name.trim()) {
+      newErrors.nonMemberName = "예약자명을 입력해주세요.";
+    }
+
+    if (!nonMemberInfo.password) {
+      newErrors.nonMemberPassword = "비회원 비밀번호를 입력해주세요.";
+    } else if (nonMemberInfo.password.length < 4) {
+      newErrors.nonMemberPassword = "비밀번호는 4자리 이상 입력해주세요.";
+    }
+
+    if (nonMemberInfo.password !== nonMemberInfo.confirmPassword) {
+      newErrors.nonMemberConfirmPassword = "비밀번호가 일치하지 않습니다.";
+    }
+
+    if (!nonMemberInfo.phone) {
+      newErrors.nonMemberPhone = "휴대폰 번호를 입력해주세요.";
+    } else if (!/^01[0-9]{9}$/.test(nonMemberInfo.phone)) {
+      newErrors.nonMemberPhone =
+        "올바른 휴대폰 번호를 입력해주세요. (01012345678)";
+    }
+
+    setErrors((prev) => ({ ...prev, ...newErrors }));
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // 결제수단 저장 함수
+  const savePaymentMethod = async (paymentMethodType: string) => {
+    try {
+      let paymentMethodData;
+
+      if (paymentMethodType === "CREDIT_CARD") {
+        paymentMethodData = {
+          // memberId 제거 - JWT에서 자동 추출
+          paymentMethodType: "CREDIT_CARD",
+          alias: cardAlias || `${cardHolderName}의 카드`,
+          cardNumber: `${cardNumber1}${cardNumber2}${cardNumber3}${cardNumber4}`,
+          cardHolderName: cardHolderName,
+          cardExpiryMonth: expiryMonth,
+          cardExpiryYear: expiryYear,
+          cardCvc: cvv, // CVC 추가
+          isDefault: false,
+        };
+      } else if (paymentMethodType === "BANK_ACCOUNT") {
+        paymentMethodData = {
+          // memberId 제거 - JWT에서 자동 추출
+          paymentMethodType: "BANK_ACCOUNT",
+          alias: bankAlias || `${selectedBankForAccount} 계좌`,
+          bankCode: getBankCode(selectedBankForAccount),
+          accountNumber: bankAccountNumber,
+          accountHolderName: savedAccountInfo?.accountHolder || "계좌주",
+          accountPassword: bankPassword, // 계좌 비밀번호 추가
+          isDefault: false,
+        };
+      } else {
+        throw new Error("지원하지 않는 결제수단 타입입니다.");
+      }
+
+      console.log("저장할 결제수단 데이터:", paymentMethodData);
+
+      // JWT 토큰 확인
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
+
+      // 개선된 savedPaymentMethodApi 사용 - JWT에서 memberId 자동 추출
+      const response =
+        await savedPaymentMethodApi.addSavedPaymentMethod(paymentMethodData);
+
+      if (response) {
+        alert("결제수단이 성공적으로 저장되었습니다!");
+        // 저장된 결제수단 목록 새로고침
+        await fetchSavedPaymentMethods();
+      }
+    } catch (error: any) {
+      console.error("결제수단 저장 에러:", error);
+
+      // 🔄 401/403 에러는 이미 자동 토큰 갱신 처리됨
+      let errorMessage = "결제수단 저장에 실패했습니다.";
+
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        errorMessage = "인증이 필요합니다. 다시 로그인해주세요.";
+      } else if (error.response?.data?.message) {
+        errorMessage = `저장 실패: ${error.response.data.message}`;
+      }
+
+      alert(errorMessage);
+    }
+  };
+
+  // 계좌 유효성 검증 - 검증 전용 API 사용 (저장하지 않음)
+  const handleAccountVerification = async () => {
+    if (!validateBankAccount()) return;
+
+    setIsProcessing(true);
+    try {
+      // 계좌 검증 전용 API 사용 (저장하지 않음)
+      const verificationData = {
+        bankCode: selectedBankForAccount,
+        accountNumber: bankAccountNumber,
+        accountPassword: bankPassword,
+      };
+
+      console.log("🏦 계좌 인증 요청:", {
+        bankCode: selectedBankForAccount,
+        accountNumber: bankAccountNumber.replace(/(\d{4})(\d+)(\d{4})/, "$1****$3"),
+        hasPassword: !!bankPassword,
+        passwordLength: bankPassword.length,
+      });
+
+      // 계좌 검증 전용 API 호출
+      const response = await bankAccountApi.verifyBankAccount(verificationData);
+      
+      console.log("계좌 인증 API 응답:", response);
+
+      // 무조건 성공 처리 (Mock 환경)
+      const accountInfo: BankInfo = {
+        bankName: response?.result?.bankName || selectedBankForAccount,
+        accountNumber: response?.result?.maskedAccountNumber || bankAccountNumber.replace(/(\d{6})(\d{2})(\d+)/, "$1-$2-$3"),
+        accountHolder: response?.result?.accountHolderName || "예금주",
+      };
+
+      setSavedAccountInfo(accountInfo);
+      setIsAccountVerified(true);
+      alert("계좌 인증이 완료되었습니다!");
+      
+      // 성공 처리 후 바로 종료
+      setIsProcessing(false);
+      return;
+    } catch (error: any) {
+      console.error("계좌 인증 에러:", error);
+
+      let errorMessage =
+        "계좌 인증에 실패했습니다. 계좌번호와 비밀번호를 확인해주세요.";
+
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        errorMessage = "인증이 필요합니다. 다시 로그인해주세요.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+
+      alert(errorMessage);
+      setIsProcessing(false);
+    }
+  };
+
+  // 결제 처리 함수
+>>>>>>> a9130dc (JWT 토큰 회원정보 수정)
   const handlePayment = async () => {
     if (!agreeTerms) {
       alert("이용약관에 동의해주세요.")
