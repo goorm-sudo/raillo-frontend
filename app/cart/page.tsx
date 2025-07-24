@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuthCheck } from "@/hooks/use-auth-check"
+import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -34,7 +34,6 @@ import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import { getCart, deleteReservation } from '@/lib/api/booking'
 import { handleError } from '@/lib/utils/errorHandler'
-import { useAuth } from '@/hooks/use-auth'
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 
@@ -63,7 +62,7 @@ interface CartItem {
 
 export default function CartPage() {
   const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading } = useAuthCheck({ requireAuth: true })
+  const { isAuthenticated, isLoading: authLoading } = useAuth({ requireAuth: true })
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

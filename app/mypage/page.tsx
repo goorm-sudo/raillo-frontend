@@ -17,11 +17,11 @@ import {useRouter} from "next/navigation"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import {getMemberInfo, MemberInfo} from "@/lib/api/user"
-import { useAuthCheck } from "@/hooks/use-auth-check"
+import { useAuth } from "@/hooks/use-auth"
 import MyPageSidebar from "@/components/layout/MyPageSidebar"
 
 export default function MyPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuthCheck({ requireAuth: true })
+  const { isAuthenticated, isLoading: authLoading } = useAuth({ requireAuth: true })
   const [memberInfo, setMemberInfo] = useState<MemberInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
