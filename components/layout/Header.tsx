@@ -15,7 +15,13 @@ export default function Header() {
   const pathname = usePathname()
 
   useEffect(() => {
-    setIsLoggedIn(tokenManager.isAuthenticated())
+    // 페이지 로드 시에만 토큰 상태 갱신 (새로고침 시에만 동작)
+    const initAuth = async () => {
+      const isAuth = await tokenManager.initializeAuth()
+      setIsLoggedIn(isAuth)
+    }
+    
+    initAuth()
   }, [])
 
   // 로그인 상태를 실시간으로 업데이트하는 함수
@@ -139,18 +145,30 @@ export default function Header() {
                     <LogOut className="h-4 w-4" />
                     <span>로그아웃</span>
                   </Button>
-                  <Link href="/cart">
-                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                      <ShoppingCart className="h-4 w-4" />
-                      <span>장바구니</span>
-                    </Button>
-                  </Link>
-                  <Link href="/mypage">
-                    <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                      <User className="h-4 w-4" />
-                      <span>마이페이지</span>
-                    </Button>
-                  </Link>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="flex items-center space-x-2"
+                    onClick={async () => {
+                      await updateLoginStatus()
+                      router.push('/cart')
+                    }}
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    <span>장바구니</span>
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="flex items-center space-x-2"
+                    onClick={async () => {
+                      await updateLoginStatus()
+                      router.push('/mypage')
+                    }}
+                  >
+                    <User className="h-4 w-4" />
+                    <span>마이페이지</span>
+                  </Button>
                 </>
               ) : (
                 <>

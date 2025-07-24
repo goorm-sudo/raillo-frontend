@@ -85,10 +85,9 @@ export default function LoginPage() {
       const response = await login({ memberNo: memberNumber, password })
       
       if (response.result) {
-        // 토큰들을 localStorage에 저장
+        // accessToken을 sessionStorage에 저장 (refreshToken은 백엔드에서 HttpOnly 쿠키로 설정)
         tokenManager.setLoginTokens(
           response.result.accessToken,
-          response.result.refreshToken,
           response.result.accessTokenExpiresIn
         )
         

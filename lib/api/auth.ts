@@ -117,6 +117,7 @@ export const authAPI = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${temporaryToken}`,
             },
+            credentials: 'include', // HttpOnly 쿠키 포함
             body: JSON.stringify(requestData),
         });
 

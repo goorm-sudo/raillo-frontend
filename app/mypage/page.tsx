@@ -17,11 +17,11 @@ import {useRouter} from "next/navigation"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import {getMemberInfo, MemberInfo} from "@/lib/api/user"
-import { useAuth } from "@/hooks/use-auth"
+import { useAuthCheck } from "@/hooks/use-auth-check"
 import MyPageSidebar from "@/components/layout/MyPageSidebar"
 
 export default function MyPage() {
-  const { isChecking, isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useAuthCheck({ requireAuth: true })
   const [memberInfo, setMemberInfo] = useState<MemberInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -44,7 +44,7 @@ export default function MyPage() {
   }, [isAuthenticated])
 
   // 로딩 중이거나 인증 확인 중일 때
-  if (isChecking || loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />

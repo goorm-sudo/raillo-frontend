@@ -10,26 +10,36 @@ let isShowingExpirationAlert = false;
 // 토큰 갱신 시도 여부 관리 (무한 루프 방지)
 let hasAttemptedRefresh = false;
 
+// 쿠키 유틸리티 함수들
+const cookieUtils = {
+  deleteCookie: (name: string) => {
+    if (typeof document !== 'undefined') {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict; Secure`;
+    }
+  }
+};
+
 // 토큰 관리 함수들
 export const tokenManager = {
   setToken: (token: string) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('accessToken', token);
+      sessionStorage.setItem('accessToken', token);
     }
   },
 
   getToken: (): string | null => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('accessToken');
+      return sessionStorage.getItem('accessToken');
     }
     return null;
   },
 
   removeToken: () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('tokenExpiresIn');
+      sessionStorage.removeItem('accessToken');
+      sessionStorage.removeItem('tokenExpiresIn');
+      // HttpOnly 쿠키 삭제는 백엔드에서 처리되어야 하지만, 클라이언트에서도 시도
+      cookieUtils.deleteCookie('refreshToken');
     }
     // 토큰 제거 시 갱신 시도 플래그도 리셋
     hasAttemptedRefresh = false;
@@ -37,8 +47,8 @@ export const tokenManager = {
 
   isAuthenticated: (): boolean => {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('accessToken');
-      const expiresIn = localStorage.getItem('tokenExpiresIn');
+      const token = sessionStorage.getItem('accessToken');
+      const expiresIn = sessionStorage.getItem('tokenExpiresIn');
       
       if (!token || !expiresIn) {
         return false;
@@ -48,41 +58,70 @@ export const tokenManager = {
       const expirationTime = parseInt(expiresIn);
       const currentTime = Date.now();
       
-      if (currentTime >= expirationTime) {
-        // 토큰이 만료되었지만 refreshToken이 있으면 갱신 가능하다고 판단
-        const refreshToken = localStorage.getItem('refreshToken');
-        
-        if (refreshToken) {
-          return true; // refreshToken이 있으면 갱신 가능하므로 true 반환
-        } else {
-          // refreshToken이 없으면 완전히 제거
-          tokenManager.removeToken();
-          return false;
-        }
+      // 토큰이 아직 유효하면 true 반환
+      if (currentTime < expirationTime) {
+        return true;
       }
-
-      return true;
+      
+      // 토큰이 만료된 경우 false 반환 (갱신은 API 요청에서 처리)
+      return false;
     }
     return false;
   },
 
-  // 로그인 성공 시 토큰들을 저장
-  setLoginTokens: (accessToken: string, refreshToken: string, expiresIn: number) => {
+  // 로그인 성공 시 accessToken만 클라이언트에서 저장 (refreshToken은 백엔드에서 HttpOnly 쿠키로 설정)
+  setLoginTokens: (accessToken: string, expiresIn: number) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-      localStorage.setItem('tokenExpiresIn', expiresIn.toString());
+      sessionStorage.setItem('accessToken', accessToken);
+      sessionStorage.setItem('tokenExpiresIn', expiresIn.toString());
     }
     // 로그인 시 갱신 시도 플래그 리셋
     hasAttemptedRefresh = false;
   },
 
-  // refreshToken 가져오기
-  getRefreshToken: (): string | null => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('refreshToken');
+  // 페이지 로드 시 토큰 상태 확인 및 자동 갱신
+  initializeAuth: async (): Promise<boolean> => {
+    if (typeof window === 'undefined') return false;
+    
+    const token = sessionStorage.getItem('accessToken');
+    const expiresIn = sessionStorage.getItem('tokenExpiresIn');
+    
+    // 토큰이 있고 유효하면 true 반환
+    if (token && expiresIn) {
+      const expirationTime = parseInt(expiresIn);
+      const currentTime = Date.now();
+      
+      if (currentTime < expirationTime) {
+        return true;
+      }
     }
-    return null;
+    
+    // HttpOnly 쿠키는 JavaScript로 접근 불가하므로 reissue API 호출로 판단
+    // 처음 접속한 사용자나 로그아웃한 사용자는 401 응답을 받게 됨
+    try {
+      const refreshSuccess = await tokenManager.refreshToken();
+      return refreshSuccess;
+    } catch (error) {
+      // refreshToken이 없거나 만료된 경우 또는 처음 접속자
+      return false;
+    }
+  },
+
+  // HttpOnly refreshToken 존재 여부 확인 (API 호출로 처리)
+  hasRefreshToken: async (): Promise<boolean> => {
+    try {
+      // /reissue 엔드포인트로 테스트 요청
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/reissue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      
+      // 401이 아니면 refreshToken이 있다고 가정
+      return response.status !== 401;
+    } catch (error) {
+      return false;
+    }
   },
 
   // 토큰 만료 시 사용자에게 알림
@@ -94,28 +133,21 @@ export const tokenManager = {
     isShowingExpirationAlert = true;
 
     try {
-      // 사용자에게 토큰 갱신 여부 확인
-      const shouldRefresh = window.confirm(
-        '로그인 세션이 만료되었습니다.\n\n' +
-        '계속 사용하시려면 "확인"을, 로그아웃하시려면 "취소"를 눌러주세요.'
-      );
-
-      if (shouldRefresh) {
-        // 토큰 갱신 시도
-        const refreshSuccess = await tokenManager.refreshToken();
-        if (refreshSuccess) {
-          console.log('✅ 사용자 요청으로 토큰 갱신 성공');
-          return true;
-        } else {
-          // 토큰 갱신 실패 시 로그아웃
-          alert('토큰 갱신에 실패했습니다. 다시 로그인해주세요.');
-          tokenManager.logout();
-          return false;
-        }
+      // 자동으로 토큰 갱신 시도
+      const refreshSuccess = await tokenManager.refreshToken();
+      if (refreshSuccess) {
+        console.log('✅ 자동 토큰 갱신 성공');
+        return true;
       } else {
-        // 사용자가 취소한 경우 로그아웃
-        console.log('사용자가 토큰 갱신을 취소했습니다.');
-        tokenManager.logout();
+        // 토큰 갱신 실패 시 사용자에게 알림
+        const shouldLogin = window.confirm(
+          '로그인 세션이 만료되었습니다.\n\n' +
+          '로그인 페이지로 이동하시겠습니까?'
+        );
+        
+        if (shouldLogin) {
+          tokenManager.logout();
+        }
         return false;
       }
     } finally {
@@ -140,29 +172,28 @@ export const tokenManager = {
       return refreshPromise;
     }
 
-    // refreshToken이 없으면 갱신 불가
-    const refreshToken = tokenManager.getRefreshToken();
-    if (!refreshToken) {
-      return false;
-    }
-
     // 갱신 시도 플래그 설정
     hasAttemptedRefresh = true;
 
     isRefreshing = true;
     refreshPromise = (async () => {
       try {
-        // refreshToken을 Authorization 헤더에 포함하여 요청
+        // /reissue API 호출로 토큰 갱신
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/reissue`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${refreshToken}`,
           },
+          credentials: 'include', // HttpOnly 쿠키 포함
         });
 
         if (!response.ok) {
-          throw new Error(`토큰 갱신 실패: ${response.status}`);
+          // 401이면 refreshToken이 없거나 만료됨 (정상적인 상황)
+          if (response.status === 401) {
+            tokenManager.removeToken();
+          }
+          console.log(`토큰 갱신 불가: ${response.status} (정상적인 상황일 수 있음)`);
+          return false;
         }
 
         const data = await response.json();
@@ -170,9 +201,9 @@ export const tokenManager = {
         if (data.result) {
           const { accessToken, accessTokenExpiresIn } = data.result;
           
-          // 새로운 토큰 저장
+          // 새로운 accessToken 저장
           tokenManager.setToken(accessToken);
-          localStorage.setItem('tokenExpiresIn', accessTokenExpiresIn.toString());
+          sessionStorage.setItem('tokenExpiresIn', accessTokenExpiresIn.toString());
           
           // 갱신 성공 시 플래그 리셋
           hasAttemptedRefresh = false;
@@ -184,6 +215,8 @@ export const tokenManager = {
         return false;
       } catch (error) {
         console.error('❌ 토큰 갱신 실패:', error);
+        // 갱신 실패 시 토큰 제거
+        tokenManager.removeToken();
         return false;
       } finally {
         isRefreshing = false;

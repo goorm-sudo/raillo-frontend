@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useAuthCheck } from "@/hooks/use-auth-check"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -62,10 +63,10 @@ interface CartItem {
 
 export default function CartPage() {
   const router = useRouter()
+  const { isAuthenticated, isLoading: authLoading } = useAuthCheck({ requireAuth: true })
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/cart' })
 
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -75,7 +76,7 @@ export default function CartPage() {
   // 장바구니 데이터 로드
   useEffect(() => {
     // 로그인 상태가 확인된 후에만 장바구니 데이터를 로드
-    if (isChecking || !isAuthenticated) return
+    if (authLoading || !isAuthenticated) return
     
     const fetchCart = async () => {
       try {
@@ -100,7 +101,7 @@ export default function CartPage() {
     }
 
     fetchCart()
-  }, [isChecking, isAuthenticated])
+  }, [authLoading, isAuthenticated])
 
 
 
@@ -200,7 +201,7 @@ export default function CartPage() {
   const allSelected = cartItems.length > 0 && cartItems.every((item) => item.selected)
 
   // 로그인 상태 확인 중
-  if (isChecking) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
         <Header />

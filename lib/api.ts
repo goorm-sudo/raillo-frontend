@@ -51,18 +51,6 @@ const getDefaultHeaders = async (): Promise<Record<string, string>> => {
         if (token) {
             headers.Authorization = `Bearer ${token}`;
         }
-    } else {
-        // 토큰이 만료되었지만 refreshToken이 있으면 갱신 시도
-        const refreshToken = tokenManager.getRefreshToken();
-        if (refreshToken) {
-            const refreshSuccess = await tokenManager.refreshToken();
-            if (refreshSuccess) {
-                const newToken = tokenManager.getToken();
-                if (newToken) {
-                    headers.Authorization = `Bearer ${newToken}`;
-                }
-            }
-        }
     }
 
     return headers;
@@ -79,6 +67,7 @@ async function apiRequest<T>(
 
     const config: RequestInit = {
         headers: await getDefaultHeaders(),
+        credentials: 'include', // HttpOnly 쿠키 포함
         ...options,
     };
 
@@ -96,21 +85,17 @@ async function apiRequest<T>(
         const duration = endTime.getTime() - startTime.getTime();
 
         if (!response.ok) {
-            // 401 에러이고 재시도하지 않았고 토큰이 있는 경우 토큰 갱신 시도
-            if (response.status === 401 && retryCount === 0 && tokenManager.getRefreshToken()) {
+            // 401 에러이고 재시도하지 않은 경우 토큰 갱신 시도
+            if (response.status === 401 && retryCount === 0) {
                 const refreshSuccess = await tokenManager.refreshToken();
                 
                 if (refreshSuccess) {
                     // 토큰 갱신 성공 시 재시도 (최대 1회)
                     return apiRequest<T>(endpoint, options, retryCount + 1);
                 } else {
-                    // 토큰 갱신 실패 시 사용자에게 알림
-                    const userChoice = await tokenManager.handleTokenExpiration();
-                    if (userChoice) {
-                        // 사용자가 토큰 갱신을 선택한 경우 재시도
-                        return apiRequest<T>(endpoint, options, retryCount + 1);
-                    }
-                    // 사용자가 로그아웃을 선택한 경우 에러 처리로 넘어감
+                    // 토큰 갱신 실패 시 사용자에게 알림 및 로그인 페이지로 리다이렉트
+                    await tokenManager.handleTokenExpiration();
+                    // 에러 처리로 넘어감
                 }
             }
 
