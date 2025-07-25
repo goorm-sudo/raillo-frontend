@@ -763,9 +763,20 @@ export default function TrainSearchPage() {
       return
     }
 
-    // 역 id 추출
-    const departureStationId = stationUtils.getStationId(departureStation)
-    const arrivalStationId = stationUtils.getStationId(arrivalStation)
+    // 왕복일 때 오는 열차인지 확인
+    const isInboundTrain = isRoundtrip && outboundReserved && selectedTrain.id.startsWith('inbound_')
+    
+    // 역 id 추출 (왕복일 때 오는 열차는 출발역과 도착역이 바뀜)
+    let departureStationId, arrivalStationId
+    if (isInboundTrain) {
+      // 오는 열차: arrivalStation → departureStation
+      departureStationId = stationUtils.getStationId(arrivalStation)
+      arrivalStationId = stationUtils.getStationId(departureStation)
+    } else {
+      // 가는 열차: departureStation → arrivalStation
+      departureStationId = stationUtils.getStationId(departureStation)
+      arrivalStationId = stationUtils.getStationId(arrivalStation)
+    }
 
     if (!departureStationId || !arrivalStationId) {
       alert("역 정보를 찾을 수 없습니다.")
@@ -850,33 +861,6 @@ export default function TrainSearchPage() {
       
       if (response.result) {
         console.log('장바구니에 추가됨:', response.result)
-        
-        // localStorage에도 백업 저장 (선택사항)
-        const cartItem = {
-          trainScheduleId: train.trainScheduleId,
-          departureStation: isOutbound ? searchData.departureStation : searchData.arrivalStation,
-          arrivalStation: isOutbound ? searchData.arrivalStation : searchData.departureStation,
-          operationDate: isOutbound ? searchData.departureDate : searchData.returnDate,
-          seatType: seatType,
-          passengers: getPassengersForReservation(),
-          tripType: 'roundtrip',
-          direction: isOutbound ? 'outbound' : 'inbound',
-          reservationId: parseInt(reservationId)
-        }
-
-        const existingCart = localStorage.getItem('rail-o-cart')
-        let cartItems = []
-        
-        if (existingCart) {
-          try {
-            cartItems = JSON.parse(existingCart)
-          } catch (error) {
-            console.error('기존 장바구니 파싱 실패:', error)
-          }
-        }
-        
-        cartItems.push(cartItem)
-        localStorage.setItem('rail-o-cart', JSON.stringify(cartItems))
       }
     } catch (error) {
       console.error('장바구니 추가 실패:', error)
