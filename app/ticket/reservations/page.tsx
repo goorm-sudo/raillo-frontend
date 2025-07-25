@@ -88,8 +88,8 @@ export default function ReservationsPage() {
     return price.toLocaleString() + "원"
   }
 
-  const getTotalPrice = (seats: ReservationDetailResponse['seats']) => {
-    return seats.reduce((total, seat) => total + seat.fare, 0)
+  const getTotalPrice = (reservation: ReservationDetailResponse) => {
+    return reservation.fare
   }
 
   const getSeatSummary = (seats: ReservationDetailResponse['seats']) => {
@@ -260,7 +260,7 @@ export default function ReservationsPage() {
                         <span className="text-gray-600">{formatDate(reservation.operationDate)}</span>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-bold text-blue-600">{formatPrice(getTotalPrice(reservation.seats))}</div>
+                        <div className="text-xl font-bold text-blue-600">{formatPrice(getTotalPrice(reservation))}</div>
                         <div className="text-xs text-gray-500">예약번호: {reservation.reservationCode}</div>
                       </div>
                     </div>

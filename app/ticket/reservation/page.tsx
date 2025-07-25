@@ -47,14 +47,13 @@ interface ReservationDetail {
   arrivalTime: string;
   operationDate: string;
   expiresAt: string;
+  fare: number;
   seats: {
     seatReservationId: number;
     passengerType: string;
     carNumber: number;
     carType: string;
     seatNumber: string;
-    baseFare: number;
-    fare: number;
   }[];
 }
 
@@ -205,7 +204,7 @@ export default function ReservationPage() {
 
   const getTotalPrice = () => {
     if (!reservation) return 0
-    return reservation.seats.reduce((total, seat) => total + seat.fare, 0)
+    return reservation.fare
   }
 
   const formatDate = (dateString: string) => {
@@ -337,7 +336,7 @@ export default function ReservationPage() {
                                  seat.passengerType === "INFANT" ? "유아" : seat.passengerType}
                               </Badge>
                             </div>
-                            <span className="font-semibold text-blue-600">{formatPrice(seat.fare)}</span>
+
                           </div>
                         ))}
                       </div>

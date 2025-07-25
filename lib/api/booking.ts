@@ -31,14 +31,13 @@ export interface ReservationDetailResponse {
   arrivalTime: string
   operationDate: string
   expiresAt: string
+  fare: number
   seats: {
     seatReservationId: number
     passengerType: string
     carNumber: number
     carType: string
     seatNumber: string
-    baseFare: number
-    fare: number
   }[]
 }
 

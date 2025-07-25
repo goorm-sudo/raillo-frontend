@@ -48,14 +48,13 @@ interface CartItem {
   arrivalTime: string
   operationDate: string
   expiresAt: string
+  fare: number
   seats: {
     seatReservationId: number
     passengerType: string
     carNumber: number
     carType: string
     seatNumber: string
-    baseFare: number
-    fare: number
   }[]
   selected: boolean
 }
@@ -133,7 +132,7 @@ export default function CartPage() {
   }
 
   const getTotalPrice = (item: CartItem) => {
-    return item.seats.reduce((total, seat) => total + seat.fare, 0)
+    return item.fare
   }
 
   const toggleItemSelection = (reservationId: number) => {
