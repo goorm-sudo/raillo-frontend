@@ -16,6 +16,7 @@ interface StationSelectorProps {
   otherStation?: string // 다른 역 (출발역이면 도착역, 도착역이면 출발역)
   onBothStationsChange?: (departure: string, arrival: string) => void // 두 역을 동시에 변경할 때
   disabled?: boolean // 비활성화 여부
+  hideHistory?: boolean // 검색 기록 숨기기
 }
 
 interface SearchHistory {
@@ -35,7 +36,8 @@ export function StationSelector({
   variant = "blue",
   otherStation = "",
   onBothStationsChange,
-  disabled
+  disabled,
+  hideHistory = false
 }: StationSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -132,7 +134,7 @@ export function StationSelector({
             </div>
 
             {/* 최근 검색 기록 */}
-            {searchHistory.length > 0 && (
+            {!hideHistory && searchHistory.length > 0 && (
               <div className="mb-4">
                 <div className="space-y-2">
                   {searchHistory.map((history, index) => (

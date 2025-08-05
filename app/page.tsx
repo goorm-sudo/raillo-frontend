@@ -9,11 +9,7 @@ import {
   ArrowLeftRight,
   CalendarIcon,
   CreditCard,
-  RotateCcw,
   Search,
-  Ticket,
-  User,
-  X,
   Train,
   MapPin,
   Clock,
@@ -51,7 +47,7 @@ export default function HomePage() {
     mildlydisabled: 0,
     veteran: 0,
   })
-  const [showSidebar, setShowSidebar] = useState(false)
+
 
   const handleSearch = async () => {
     if (!departureStation || !arrivalStation || !departureDate) {
@@ -136,83 +132,6 @@ export default function HomePage() {
 
   return (
     <PageLayout>
-      {/* Sidebar Overlay */}
-      {showSidebar && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowSidebar(false)}>
-          <div
-            className="fixed right-0 top-0 h-full w-80 bg-white shadow-xl transform transition-transform duration-300 ease-in-out"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Sidebar Header */}
-            <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">카테고리</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowSidebar(false)}
-                className="text-white hover:bg-blue-700"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            {/* Sidebar Content */}
-            <div className="p-4">
-              <nav className="space-y-2">
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">승차권 서비스</h3>
-
-                  <Link
-                    href="/ticket/purchased"
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <CreditCard className="h-5 w-5 text-green-600" />
-                    <span className="text-gray-700">승차권 확인</span>
-                  </Link>
-
-                  <Link
-                    href="/ticket/booking"
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <Ticket className="h-5 w-5 text-blue-600" />
-                    <span className="text-gray-700">승차권 예매</span>
-                  </Link>
-
-                  <Link
-                    href="/ticket/reservations"
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <Search className="h-5 w-5 text-orange-600" />
-                    <span className="text-gray-700">예약 승차권 조회</span>
-                  </Link>
-
-                  <Link
-                    href="/ticket/purchased"
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <RotateCcw className="h-5 w-5 text-red-600" />
-                    <span className="text-gray-700">승차권 반환</span>
-                  </Link>
-                </div>
-
-                {/* 비회원 서비스 섹션 */}
-                <div className="space-y-1 mt-6">
-                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">비회원 서비스</h3>
-
-                  <Link
-                    href="/guest-ticket/search"
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <User className="h-5 w-5 text-indigo-600" />
-                    <span className="text-gray-700">비회원 승차권 확인</span>
-                  </Link>
-                </div>
-              </nav>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Content */}
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
         <div className="container mx-auto px-4 py-8">

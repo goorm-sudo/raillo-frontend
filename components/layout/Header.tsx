@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Train, ShoppingCart, User, LogIn, Menu, X, CreditCard, Ticket, CalendarIcon, Search, RotateCcw, ChevronRight, LogOut, Lock, Phone } from "lucide-react"
+import { Train, ShoppingCart, User, LogIn, Menu, X, CreditCard, Ticket, CalendarIcon, Search, RotateCcw, ChevronRight, LogOut, Lock, Phone, MapPin } from "lucide-react"
 import { tokenManager } from "@/lib/auth"
 import { logout } from "@/lib/api/auth"
 
@@ -83,6 +83,7 @@ export default function Header() {
       'contact': '연락처',
       'change': '변경',
       'password': '비밀번호',
+      'landmarks': '랜드마크 찾기',
     }
     
     let currentPath = ''
@@ -250,6 +251,33 @@ export default function Header() {
                   >
                     <RotateCcw className="h-5 w-5 text-red-600" />
                     <span className="text-gray-700">승차권 반환</span>
+                  </Link>
+                </div>
+
+                {/* 비회원 서비스 섹션
+                <div className="space-y-1 mt-6">
+                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">비회원 서비스</h3>
+                  <Link 
+                    href="/guest-ticket/search" 
+                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors bg-white"
+                    onClick={() => setShowSidebar(false)}
+                  >
+                    <User className="h-5 w-5 text-indigo-600" />
+                    <span className="text-gray-700">비회원 승차권 확인</span>
+                  </Link>
+                </div>
+                */}
+
+                {/* 부가 서비스 섹션 */}
+                <div className="space-y-1 mt-6">
+                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">부가 서비스</h3>
+                  <Link 
+                    href="/landmarks" 
+                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors bg-white"
+                    onClick={() => setShowSidebar(false)}
+                  >
+                    <MapPin className="h-5 w-5 text-emerald-600" />
+                    <span className="text-gray-700">랜드마크 찾기</span>
                   </Link>
                 </div>
               </nav>
