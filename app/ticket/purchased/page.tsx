@@ -1,15 +1,13 @@
 "use client"
 
-import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useAuth } from '@/hooks/use-auth'
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { Train, ChevronLeft, MapPin, ArrowRight, Download, QrCode, Calendar, User, Clock, Printer, CreditCard } from "lucide-react"
+import { Train, MapPin, ArrowRight, User } from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import { getTickets } from '@/lib/api/booking'
@@ -19,7 +17,6 @@ import { differenceInMinutes, parse } from "date-fns"
 interface Ticket {
   ticketId: number
   reservationId: number
-  seatReservationId: number
   operationDate: string
   departureStationId: number
   departureStationName: string
@@ -46,7 +43,7 @@ export default function PurchasedTicketsPage() {
   useEffect(() => {
     // 로그인 상태가 확인된 후에만 승차권 목록을 조회
     if (isChecking || !isAuthenticated) return
-    
+
     const fetchTickets = async () => {
       try {
         setLoading(true)
@@ -91,21 +88,6 @@ export default function PurchasedTicketsPage() {
     }
   }
 
-  const getSeatTypeName = (seatType: string) => {
-    switch (seatType) {
-      case "WINDOW":
-        return "창가"
-      case "AISLE":
-        return "통로"
-      default:
-        return seatType
-    }
-  }
-
-  const formatPrice = (price: number) => {
-    return price.toLocaleString() + "원"
-  }
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return format(date, "yyyy년 MM월 dd일(EEEE)", { locale: ko })
@@ -113,16 +95,6 @@ export default function PurchasedTicketsPage() {
 
   const formatTime = (timeString: string) => {
     return timeString.substring(0, 5) // "HH:mm" 형식으로 변환
-  }
-
-  const handleDownloadTicket = (ticketId: number) => {
-    // 실제로는 PDF 다운로드 기능 구현
-    alert("승차권을 다운로드합니다.")
-  }
-
-  const handleShowQR = (ticketId: number) => {
-    // 실제로는 QR 코드 모달 표시
-    alert("QR 코드를 표시합니다.")
   }
 
   // reservationId로 그룹화
@@ -316,7 +288,7 @@ export default function PurchasedTicketsPage() {
                                    acc[ticket.trainCarNumber].push(`${ticket.seatRow}${ticket.seatColumn}`)
                                    return acc
                                  }, {})
-                                 
+
                                  return Object.entries(seatsByCar).map(([carNumber, seats]) => (
                                    <div key={carNumber} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                                      <div className="flex items-center space-x-2">

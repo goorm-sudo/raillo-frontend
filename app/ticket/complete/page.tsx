@@ -81,11 +81,6 @@ export default function PaymentCompletePage() {
     return roundtripData.inboundTrains.find(train => train.id === roundtripData.selectedInbound)
   }
 
-  const getTotalPassengers = () => {
-    if (!roundtripData) return 0
-    return Object.values(roundtripData.passengers).reduce((sum: number, count: any) => sum + count, 0)
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-2xl mx-auto px-4">
@@ -234,7 +229,6 @@ export default function PaymentCompletePage() {
                     return (
                       <div key={type} className="text-center p-3 bg-gray-50 rounded-lg">
                         <div className="font-medium text-gray-900">{typeLabels[type]}</div>
-                        <div className="text-2xl font-bold text-blue-600">{count}명</div>
                       </div>
                     )
                   })}

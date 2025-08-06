@@ -1,89 +1,121 @@
 "use client"
 
-import Link from "next/link"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label as UILabel } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Train, ChevronLeft, ArrowRight, AlertTriangle, ChevronDown, CreditCard, Lock, Calendar, MapPin, Clock, User } from "lucide-react"
+import { 
+  ArrowRight,
+  AlertTriangle, 
+  User,
+  Loader2
+} from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import { useAuth } from '@/hooks/use-auth'
-
-interface PaymentInfo {
-  trainType: string
-  trainNumber: string
-  date: string
-  departureStation: string
-  arrivalStation: string
-  departureTime: string
-  arrivalTime: string
-  seatClass: string
-  carNumber: number
-  seatNumber: string
-  price: number
-  reservationNumber: string
-}
+import { getReservation, ReservationDetailResponse } from '@/lib/api/booking'
+import { processPaymentViaCard, processPaymentViaBankAccount } from '@/lib/api/payment'
+import { handleError } from '@/lib/utils/errorHandler'
+import { format } from "date-fns"
+import { ko } from "date-fns/locale"
 
 export default function PaymentPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { isAuthenticated, isChecking } = useAuth({ redirectPath: '/ticket/payment' })
-  const [paymentMethod, setPaymentMethod] = useState("simple")
-  const [simplePaymentType, setSimplePaymentType] = useState("간편현금결제")
-  const [cardType, setCardType] = useState("personal")
+  
+  // 상태 관리
+  const [reservationData, setReservationData] = useState<ReservationDetailResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  
+  // 결제 수단
+  const [paymentMethod, setPaymentMethod] = useState("card")
+  
+  // 카드 결제 정보
   const [cardNumber1, setCardNumber1] = useState("")
   const [cardNumber2, setCardNumber2] = useState("")
   const [cardNumber3, setCardNumber3] = useState("")
   const [cardNumber4, setCardNumber4] = useState("")
   const [expiryMonth, setExpiryMonth] = useState("")
-  const [expiryYear, setExpiryYear] = useState("2025")
-  const [cvv, setCvv] = useState("")
-  const [installment, setInstallment] = useState("일시불")
+  const [expiryYear, setExpiryYear] = useState("25")
+  const [rrn, setRrn] = useState("")
   const [cardPassword, setCardPassword] = useState("")
-  const [phoneNumber, setPhoneNumber] = useState("")
-  const [phonePrefix, setPhonePrefix] = useState("010")
-  const [requestReceipt, setRequestReceipt] = useState(false)
-  const [receiptType, setReceiptType] = useState("personal")
+  const [installment, setInstallment] = useState("0")
+  
+  // 계좌이체 정보
+  const [bankCode, setBankCode] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [accountHolderName, setAccountHolderName] = useState("")
+  const [identificationNumber, setIdentificationNumber] = useState("")
+  const [accountPassword, setAccountPassword] = useState("")
+  
+  // 약관 동의
   const [agreeTerms, setAgreeTerms] = useState(false)
-  const [agreeSavePayment, setAgreeSavePayment] = useState(false)
   const [agreePersonalInfo, setAgreePersonalInfo] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
 
+  // URL 파라미터 또는 sessionStorage에서 예약 ID 추출
+  const urlReservationId = searchParams.get('reservationId')
+  const [reservationId, setReservationId] = useState<string | null>(null)
 
+  useEffect(() => {
+    // URL 파라미터가 있으면 우선 사용
+    if (urlReservationId) {
+      setReservationId(urlReservationId)
+    } else {
+      // sessionStorage에서 예약 ID 가져오기
+      const tempReservationId = sessionStorage.getItem('tempReservationId')
+      if (tempReservationId) {
+        setReservationId(tempReservationId)
+        // 사용 후 sessionStorage에서 제거
+        sessionStorage.removeItem('tempReservationId')
+      }
+    }
+  }, [urlReservationId])
 
-  // 예약 정보 (실제로는 props나 상태에서 가져옴)
-  const paymentInfo: PaymentInfo = {
-    trainType: "무궁화호",
-    trainNumber: "1304",
-    date: "2025년 06월 02일(월)",
-    departureStation: "대구",
-    arrivalStation: "서울",
-    departureTime: "07:14",
-    arrivalTime: "11:15",
-    seatClass: "일반실",
-    carNumber: 2,
-    seatNumber: "8",
-    price: 20900,
-    reservationNumber: "R2025060100001",
-  }
+  // 예약 정보 조회
+  useEffect(() => {
+    if (isChecking || !isAuthenticated) return
+    
+    if (!reservationId) {
+      setError('예약 정보가 없습니다.')
+      setLoading(false)
+      return
+    }
 
-  const getTrainTypeColor = (trainType: string) => {
-    switch (trainType) {
+    const fetchReservation = async () => {
+      try {
+        setLoading(true)
+        const response = await getReservation(parseInt(reservationId))
+        setReservationData(response.result!)
+      } catch (err) {
+        const errorMessage = handleError(err, '예약 정보 조회 중 오류가 발생했습니다.', false)
+        setError(errorMessage)
+        setReservationData(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchReservation()
+  }, [isChecking, isAuthenticated, reservationId])
+
+  const getTrainTypeColor = (trainName: string) => {
+    switch (trainName) {
       case "KTX":
+      case "KTX-산천":
         return "bg-blue-600 text-white"
       case "ITX-새마을":
         return "bg-green-600 text-white"
       case "무궁화호":
-        return "bg-red-600 text-white"
+        return "bg-orange-600 text-white"
       case "ITX-청춘":
         return "bg-purple-600 text-white"
       default:
@@ -91,30 +123,105 @@ export default function PaymentPage() {
     }
   }
 
+  const getCarTypeName = (carType: string) => {
+    switch (carType) {
+      case "STANDARD":
+        return "일반실"
+      case "FIRST_CLASS":
+        return "특실"
+      default:
+        return carType
+    }
+  }
+
+  const getPassengerTypeName = (passengerType: string) => {
+    switch (passengerType) {
+      case "ADULT":
+        return "어른"
+      case "CHILD":
+        return "어린이"
+      case "INFANT":
+        return "유아"
+      case "SENIOR":
+        return "경로"
+      default:
+        return passengerType
+    }
+  }
+
   const formatPrice = (price: number) => {
     return price.toLocaleString() + "원"
   }
 
-  // 로그인 상태 확인 중
-  if (isChecking) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
-        <Header />
-        <div className="container mx-auto px-4 py-16 text-center flex-1">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">로그인 상태를 확인하고 있습니다...</p>
-        </div>
-        <Footer />
-      </div>
-    )
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return format(date, "yyyy년 MM월 dd일(EEEE)", { locale: ko })
   }
 
-  // 로그인되지 않은 경우 (리다이렉트 중)
-  if (!isAuthenticated) {
-    return null
+  const formatTime = (timeString: string) => {
+    return timeString.substring(0, 5) // "HH:mm" 형식으로 변환
+  }
+
+  const handleCardNumberChange = (value: string, field: number) => {
+    const numericValue = value.replace(/[^0-9]/g, "").slice(0, 4)
+    switch (field) {
+      case 1: setCardNumber1(numericValue); break
+      case 2: setCardNumber2(numericValue); break
+      case 3: setCardNumber3(numericValue); break
+      case 4: setCardNumber4(numericValue); break
+    }
+  }
+
+  const validateCardPayment = () => {
+    if (!cardNumber1 || !cardNumber2 || !cardNumber3 || !cardNumber4) {
+      alert("카드 번호를 모두 입력해주세요.")
+      return false
+    }
+    if (!expiryMonth || !expiryYear) {
+      alert("유효기간을 입력해주세요.")
+      return false
+    }
+    if (!rrn) {
+      alert("주민등록번호 앞 6자리를 입력해주세요.")
+      return false
+    }
+    if (!cardPassword) {
+      alert("카드 비밀번호 앞 2자리를 입력해주세요.")
+      return false
+    }
+    return true
+  }
+
+  const validateAccountPayment = () => {
+    if (!bankCode) {
+      alert("은행을 선택해주세요.")
+      return false
+    }
+    if (!accountNumber) {
+      alert("계좌번호를 입력해주세요.")
+      return false
+    }
+    if (!accountHolderName) {
+      alert("예금주명을 입력해주세요.")
+      return false
+    }
+    if (!identificationNumber) {
+      alert("주민등록번호 앞 6자리를 입력해주세요.")
+      return false
+    }
+    if (!accountPassword) {
+      alert("계좌 비밀번호를 입력해주세요.")
+      return false
+    }
+    return true
   }
 
   const handlePayment = async () => {
+    if (!reservationData) {
+      alert("예약 정보를 불러올 수 없습니다.")
+      return
+    }
+
     if (!agreeTerms) {
       alert("이용약관에 동의해주세요.")
       return
@@ -127,37 +234,110 @@ export default function PaymentPage() {
 
     setIsProcessing(true)
 
-    // 결제 처리 시뮬레이션
-    setTimeout(() => {
+    try {
+      if (paymentMethod === "card") {
+        if (!validateCardPayment()) return
+
+        const cardNumber = `${cardNumber1}-${cardNumber2}-${cardNumber3}-${cardNumber4}`
+        const validThru = `${expiryMonth.padStart(2, '0')}${expiryYear}`
+
+        const request = {
+          reservationId: reservationData.reservationId,
+          amount: reservationData.fare,
+          cardNumber,
+          validThru,
+          rrn,
+          installmentMonths: parseInt(installment),
+          cardPassword: parseInt(cardPassword)
+        }
+
+        const result = await processPaymentViaCard(request)
+        alert(`결제가 완료되었습니다!\n결제번호: ${result.paymentKey}`)
+        router.push("/ticket/purchased")
+
+      } else if (paymentMethod === "account") {
+        if (!validateAccountPayment()) return
+
+        const request = {
+          reservationId: reservationData.reservationId,
+          amount: reservationData.fare,
+          bankCode,
+          accountNumber,
+          accountHolderName,
+          identificationNumber,
+          accountPassword
+        }
+
+        const result = await processPaymentViaBankAccount(request)
+        alert(`결제가 완료되었습니다!\n결제번호: ${result.paymentKey}`)
+        router.push("/ticket/purchased")
+      }
+    } catch (error) {
+      console.error('Payment error:', error)
+    } finally {
       setIsProcessing(false)
-      alert("결제가 완료되었습니다!")
-      router.push("/ticket/complete")
-    }, 2000)
+    }
   }
 
-  const handleCardNumberChange = (value: string, field: number) => {
-    const numericValue = value.replace(/[^0-9]/g, "").slice(0, 4)
-    switch (field) {
-      case 1:
-        setCardNumber1(numericValue)
-        break
-      case 2:
-        setCardNumber2(numericValue)
-        break
-      case 3:
-        setCardNumber3(numericValue)
-        break
-      case 4:
-        setCardNumber4(numericValue)
-        break
-    }
+  // 로그인 상태 확인 중
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">로그인 상태를 확인하고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  // 로그인되지 않은 경우
+  if (!isAuthenticated) {
+    return null
+  }
+
+  // 로딩 중
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">예약 정보를 불러오고 있습니다...</p>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  // 에러 또는 예약 정보 없음
+  if (error || !reservationData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col">
+        <Header />
+        <div className="container mx-auto px-4 py-16 text-center flex-1">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            {error || "예약 정보를 찾을 수 없습니다"}
+          </h3>
+          <p className="text-gray-600 mb-4">
+            예약 정보가 올바르지 않거나 만료되었을 수 있습니다.
+          </p>
+          <Button onClick={() => router.push("/ticket/reservations")} className="bg-blue-600 hover:bg-blue-700">
+            예약 목록으로 이동
+          </Button>
+        </div>
+        <Footer />
+      </div>
+    )
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <Header />
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Page Title */}
@@ -166,127 +346,81 @@ export default function PaymentPage() {
             <p className="text-gray-600">안전한 결제를 위해 정확한 정보를 입력해주세요</p>
           </div>
 
-          {/* Ticket Information Card */}
+          {/* 예약 정보 카드 */}
           <Card className="mb-6 border-l-4 border-blue-600">
             <CardContent className="p-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
                 <div className="flex items-center space-x-3 mb-2 md:mb-0">
-                  <Badge className={`${getTrainTypeColor(paymentInfo.trainType)} px-3 py-1`}>
-                    {paymentInfo.trainType}
+                  <Badge className={`${getTrainTypeColor(reservationData.trainName)} px-3 py-1`}>
+                    {reservationData.trainName}
                   </Badge>
-                  <span className="font-bold">{paymentInfo.trainNumber}</span>
-                  <span className="text-gray-600">{paymentInfo.date}</span>
+                  <span className="font-bold">{reservationData.trainNumber}</span>
+                  <span className="text-gray-600">{formatDate(reservationData.operationDate)}</span>
                 </div>
-                <div className="text-xl font-bold text-red-600">{formatPrice(paymentInfo.price)}</div>
+                <div className="text-xl font-bold text-red-600">{formatPrice(reservationData.fare)}</div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 mb-4">
                 <div className="flex items-center space-x-2">
-                  <span className="font-medium">{paymentInfo.departureStation}</span>
+                  <span className="font-medium">{reservationData.departureStationName}</span>
                   <ArrowRight className="h-4 w-4 text-gray-400" />
-                  <span className="font-medium">{paymentInfo.arrivalStation}</span>
+                  <span className="font-medium">{reservationData.arrivalStationName}</span>
                   <span className="text-gray-600 ml-2">
-                    ({paymentInfo.departureTime} ~ {paymentInfo.arrivalTime})
+                    ({formatTime(reservationData.departureTime)} ~ {formatTime(reservationData.arrivalTime)})
                   </span>
                 </div>
                 <div className="text-sm text-gray-600">
-                  {paymentInfo.seatClass} | 순방향 | {paymentInfo.carNumber}호차 | {paymentInfo.seatNumber} | 어른
+                  예약코드: {reservationData.reservationCode}
                 </div>
               </div>
 
+              {/* 좌석 정보 */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
+                  <User className="h-4 w-4 mr-2" />
+                  좌석 정보
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {reservationData.seats.map((seat, index) => (
+                    <div key={seat.seatReservationId} className="flex items-center justify-between p-2 bg-white rounded border">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="text-xs">
+                          {getCarTypeName(seat.carType)}
+                        </Badge>
+                        <span className="text-sm">
+                          {seat.carNumber}호차 {seat.seatNumber}
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-600">
+                        {getPassengerTypeName(seat.passengerType)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 요금 상세 */}
               <div className="mt-4 pt-4 border-t">
-                <div className="flex flex-col space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">운임:</span>
-                    <span className="font-medium text-red-600">{formatPrice(paymentInfo.price)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">요금:</span>
-                    <span>0원</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">운임할인:</span>
-                    <span>0원</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">요금할인:</span>
-                    <span>0원</span>
-                  </div>
-                  <div className="flex justify-between font-bold">
-                    <span>합계(1건):</span>
-                    <span className="text-red-600">{formatPrice(paymentInfo.price)}</span>
-                  </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">총 운임:</span>
+                  <span className="font-bold text-red-600">{formatPrice(reservationData.fare)}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Point Usage Section */}
-          <Accordion type="single" collapsible className="mb-6">
-            <AccordionItem value="points">
-              <AccordionTrigger className="bg-white rounded-lg border px-6 py-4 hover:bg-gray-50">
-                <div className="flex items-center">
-                  <span className="font-bold">포인트 사용</span>
-                  <span className="text-sm text-gray-500 ml-2">(한가지만 사용가능)</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="bg-white border border-t-0 rounded-b-lg p-6">
-                <div className="space-y-4">
-                  {/* KTX 마일리지 */}
-                  <div className="flex items-center justify-between py-3 border-b">
-                    <span className="font-medium">KTX 마일리지</span>
-                    <ChevronDown className="h-4 w-4 text-gray-400" />
-                  </div>
-
-                  {/* 레일포인트 */}
-                  <div className="flex items-center justify-between py-3 border-b">
-                    <span className="font-medium">레일포인트</span>
-                    <ChevronDown className="h-4 w-4 text-gray-400" />
-                  </div>
-
-                  {/* 씨티포인트 */}
-                  <div className="flex items-center justify-between py-3 border-b">
-                    <span className="font-medium">씨티포인트</span>
-                    <ChevronDown className="h-4 w-4 text-gray-400" />
-                  </div>
-
-                  {/* OK캐쉬백포인트 */}
-                  <div className="flex items-center justify-between py-3 border-b">
-                    <span className="font-medium">OK캐쉬백포인트</span>
-                    <ChevronDown className="h-4 w-4 text-gray-400" />
-                  </div>
-
-                  {/* L.POINT */}
-                  <div className="flex items-center justify-between py-3 border-b">
-                    <span className="font-medium">L.POINT</span>
-                    <ChevronDown className="h-4 w-4 text-gray-400" />
-                  </div>
-
-                  <div className="flex justify-end mt-4">
-                    <span className="text-sm">
-                      포인트 차감(-): <span className="text-red-600 font-medium">0원</span>
-                    </span>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-
-          {/* Payment Method Section */}
+          {/* 결제 수단 선택 */}
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="text-xl">결제수단 선택</CardTitle>
             </CardHeader>
             <CardContent>
               <Tabs value={paymentMethod} onValueChange={setPaymentMethod} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-6">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
                   <TabsTrigger
-                    value="simple"
+                    value="card"
                     className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                   >
-                    간편결제
-                  </TabsTrigger>
-                  <TabsTrigger value="card" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
                     카드결제
                   </TabsTrigger>
                   <TabsTrigger
@@ -297,162 +431,43 @@ export default function PaymentPage() {
                   </TabsTrigger>
                 </TabsList>
 
-                {/* 간편결제 탭 */}
-                <TabsContent value="simple">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-6">
-                    <Button
-                      variant={simplePaymentType === "간편현금결제" ? "default" : "outline"}
-                      onClick={() => setSimplePaymentType("간편현금결제")}
-                      className={`${
-                        simplePaymentType === "간편현금결제" ? "bg-blue-600 text-white" : ""
-                      } justify-center`}
-                    >
-                      간편현금결제
-                    </Button>
-                    <Button
-                      variant={simplePaymentType === "네이버 페이" ? "default" : "outline"}
-                      onClick={() => setSimplePaymentType("네이버 페이")}
-                      className={`${simplePaymentType === "네이버 페이" ? "bg-blue-600 text-white" : ""} justify-center`}
-                    >
-                      네이버 페이
-                    </Button>
-                    <Button
-                      variant={simplePaymentType === "카카오 페이" ? "default" : "outline"}
-                      onClick={() => setSimplePaymentType("카카오 페이")}
-                      className={`${simplePaymentType === "카카오 페이" ? "bg-blue-600 text-white" : ""} justify-center`}
-                    >
-                      카카오 페이
-                    </Button>
-                    <Button
-                      variant={simplePaymentType === "PAYCO" ? "default" : "outline"}
-                      onClick={() => setSimplePaymentType("PAYCO")}
-                      className={`${simplePaymentType === "PAYCO" ? "bg-blue-600 text-white" : ""} justify-center`}
-                    >
-                      PAYCO
-                    </Button>
-                    <Button
-                      variant={simplePaymentType === "내통장결제" ? "default" : "outline"}
-                      onClick={() => setSimplePaymentType("내통장결제")}
-                      className={`${simplePaymentType === "내통장결제" ? "bg-blue-600 text-white" : ""} justify-center`}
-                    >
-                      내통장결제
-                    </Button>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="requestReceipt"
-                        checked={requestReceipt}
-                        onCheckedChange={(checked) => setRequestReceipt(checked === true)}
-                        className="data-[state=checked]:bg-blue-600"
-                      />
-                      <UILabel htmlFor="requestReceipt">현금영수증 신청</UILabel>
-                    </div>
-
-                    {requestReceipt && (
-                      <>
-                        <div className="flex items-center space-x-4">
-                          <RadioGroup value={receiptType} onValueChange={setReceiptType} className="flex space-x-4">
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="personal" id="personal" />
-                              <UILabel htmlFor="personal">개인</UILabel>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="business" id="business" />
-                              <UILabel htmlFor="business">사업자지출증빙</UILabel>
-                            </div>
-                          </RadioGroup>
-                        </div>
-
-                        <div className="flex space-x-2">
-                          <Select value={phonePrefix} onValueChange={setPhonePrefix}>
-                            <SelectTrigger className="w-24">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="010">010</SelectItem>
-                              <SelectItem value="011">011</SelectItem>
-                              <SelectItem value="016">016</SelectItem>
-                              <SelectItem value="017">017</SelectItem>
-                              <SelectItem value="018">018</SelectItem>
-                              <SelectItem value="019">019</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            placeholder="휴대폰 번호 입력"
-                            value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9]/g, ""))}
-                            maxLength={8}
-                            className="flex-1"
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </TabsContent>
-
                 {/* 카드결제 탭 */}
                 <TabsContent value="card">
                   <div className="space-y-6">
-                    {/* 카드종류 */}
+                    {/* 카드번호 */}
                     <div className="space-y-3">
-                      <UILabel className="text-base font-medium">카드종류</UILabel>
-                      <div className="flex space-x-4">
-                        <Button
-                          variant={cardType === "personal" ? "default" : "outline"}
-                          onClick={() => setCardType("personal")}
-                          className={`${cardType === "personal" ? "bg-blue-600 text-white" : ""} rounded-full px-6`}
-                        >
-                          개인카드
-                        </Button>
-                        <Button
-                          variant={cardType === "business" ? "default" : "outline"}
-                          onClick={() => setCardType("business")}
-                          className={`${cardType === "business" ? "bg-blue-600 text-white" : ""} rounded-full px-6`}
-                        >
-                          법인카드
-                        </Button>
-                        <Button
-                          variant={cardType === "retry" ? "default" : "outline"}
-                          onClick={() => setCardType("retry")}
-                          className={`${cardType === "retry" ? "bg-blue-600 text-white" : ""} rounded-full px-6`}
-                        >
-                          다시입력
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* 신용카드 번호 */}
-                    <div className="space-y-3">
-                      <UILabel className="text-base font-medium">신용카드 번호</UILabel>
+                      <UILabel className="text-base font-medium">카드번호</UILabel>
                       <div className="flex space-x-2">
                         <Input
                           value={cardNumber1}
                           onChange={(e) => handleCardNumberChange(e.target.value, 1)}
                           maxLength={4}
-                          className="w-20 text-center bg-blue-50"
+                          placeholder="0000"
+                          className="w-20 text-center"
                         />
                         <span className="flex items-center">-</span>
                         <Input
                           value={cardNumber2}
                           onChange={(e) => handleCardNumberChange(e.target.value, 2)}
                           maxLength={4}
-                          className="w-20 text-center bg-blue-50"
+                          placeholder="0000"
+                          className="w-20 text-center"
                         />
                         <span className="flex items-center">-</span>
                         <Input
                           value={cardNumber3}
                           onChange={(e) => handleCardNumberChange(e.target.value, 3)}
                           maxLength={4}
-                          className="w-20 text-center bg-blue-50"
+                          placeholder="0000"
+                          className="w-20 text-center"
                         />
                         <span className="flex items-center">-</span>
                         <Input
                           value={cardNumber4}
                           onChange={(e) => handleCardNumberChange(e.target.value, 4)}
                           maxLength={4}
-                          className="w-20 text-center bg-blue-50"
+                          placeholder="0000"
+                          className="w-20 text-center"
                         />
                       </div>
                     </div>
@@ -466,42 +481,33 @@ export default function PaymentPage() {
                           value={expiryMonth}
                           onChange={(e) => setExpiryMonth(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
                           maxLength={2}
-                          className="w-20 text-center bg-blue-50"
+                          className="w-20 text-center"
                         />
                         <span>월</span>
-                        <Select value={expiryYear} onValueChange={setExpiryYear}>
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="2025">2025</SelectItem>
-                            <SelectItem value="2026">2026</SelectItem>
-                            <SelectItem value="2027">2027</SelectItem>
-                            <SelectItem value="2028">2028</SelectItem>
-                            <SelectItem value="2029">2029</SelectItem>
-                            <SelectItem value="2030">2030</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Input
+                          placeholder="YY"
+                          value={expiryYear}
+                          onChange={(e) => setExpiryYear(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
+                          maxLength={2}
+                          className="w-20 text-center"
+                        />
                         <span>년</span>
                       </div>
                     </div>
 
-                    {/* 인증번호 */}
+                    {/* 주민등록번호 */}
                     <div className="space-y-3">
-                      <UILabel className="text-base font-medium">인증번호</UILabel>
-                      <div className="flex space-x-4">
-                        <Input
-                          placeholder="인증번호를 입력하세요."
-                          value={cvv}
-                          onChange={(e) => setCvv(e.target.value.replace(/[^0-9]/g, ""))}
-                          maxLength={3}
-                          className="bg-blue-50"
-                        />
-                        <span className="text-sm text-gray-600 flex items-center">주민번호 앞 6자리 입력</span>
-                      </div>
+                      <UILabel className="text-base font-medium">주민등록번호 앞 6자리</UILabel>
+                      <Input
+                        placeholder="000000"
+                        value={rrn}
+                        onChange={(e) => setRrn(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                        maxLength={6}
+                        className="w-32"
+                      />
                     </div>
 
-                    {/* 할부개월 */}
+                    {/* 할부 */}
                     <div className="space-y-3">
                       <UILabel className="text-base font-medium">할부개월</UILabel>
                       <Select value={installment} onValueChange={setInstallment}>
@@ -509,61 +515,39 @@ export default function PaymentPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="일시불">일시불</SelectItem>
-                          <SelectItem value="2개월">2개월</SelectItem>
-                          <SelectItem value="3개월">3개월</SelectItem>
-                          <SelectItem value="6개월">6개월</SelectItem>
-                          <SelectItem value="12개월">12개월</SelectItem>
+                          <SelectItem value="0">일시불</SelectItem>
+                          <SelectItem value="2">2개월</SelectItem>
+                          <SelectItem value="3">3개월</SelectItem>
+                          <SelectItem value="6">6개월</SelectItem>
+                          <SelectItem value="12">12개월</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {/* 신용카드 비밀번호 */}
+                    {/* 카드 비밀번호 */}
                     <div className="space-y-3">
-                      <UILabel className="text-base font-medium">신용카드 비밀번호</UILabel>
-                      <div className="flex space-x-4">
-                        <Input
-                          value={cardPassword}
-                          onChange={(e) => setCardPassword(e.target.value.replace(/[^0-9]/g, ""))}
-                          maxLength={2}
-                          type="password"
-                          className="w-20 text-center bg-blue-50"
-                        />
-                        <span className="text-sm text-gray-600 flex items-center">**(앞 2자리 입력)</span>
-                      </div>
+                      <UILabel className="text-base font-medium">카드 비밀번호 앞 2자리</UILabel>
+                      <Input
+                        value={cardPassword}
+                        onChange={(e) => setCardPassword(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
+                        maxLength={2}
+                        type="password"
+                        placeholder="**"
+                        className="w-20 text-center"
+                      />
                     </div>
 
-                    {/* 개인정보 수집 및 이용동의 */}
+                    {/* 개인정보 동의 */}
                     <div className="space-y-4 border-t pt-4">
-                      <div className="flex items-center justify-between">
-                        <UILabel className="text-base font-medium">[필수] 개인정보 수집 및 이용동의</UILabel>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="agreePersonalInfo"
-                            checked={agreePersonalInfo}
-                            onCheckedChange={(checked) => setAgreePersonalInfo(checked === true)}
-                          />
-                          <UILabel htmlFor="agreePersonalInfo">동의함</UILabel>
-                        </div>
-                      </div>
-
-                      <div className="border rounded-lg overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-2 text-left border-r">목적</th>
-                              <th className="px-4 py-2 text-left border-r">항목</th>
-                              <th className="px-4 py-2 text-left">보유기간</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr className="border-t">
-                              <td className="px-4 py-2 border-r">승차권 예매 시</td>
-                              <td className="px-4 py-2 border-r">카드번호, 유효기간, 비밀번호, 카드종류</td>
-                              <td className="px-4 py-2">사용목적 달성 후 즉시 폐기</td>
-                            </tr>
-                          </tbody>
-                        </table>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="agreePersonalInfo"
+                          checked={agreePersonalInfo}
+                          onCheckedChange={(checked) => setAgreePersonalInfo(checked === true)}
+                        />
+                        <UILabel htmlFor="agreePersonalInfo" className="text-sm">
+                          [필수] 개인정보 수집 및 이용동의
+                        </UILabel>
                       </div>
                     </div>
                   </div>
@@ -572,11 +556,69 @@ export default function PaymentPage() {
                 {/* 계좌이체 탭 */}
                 <TabsContent value="account">
                   <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-4">계좌이체 이용안내</h3>
-                      <p className="text-gray-600">
-                        아래 결제 버튼 클릭 시 팝업으로 오픈된 결제창에 결제정보를 입력하여 진행하시기 바랍니다.
-                      </p>
+                    {/* 은행 선택 */}
+                    <div className="space-y-3">
+                      <UILabel className="text-base font-medium">은행 선택</UILabel>
+                      <Select value={bankCode} onValueChange={setBankCode}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="은행을 선택하세요" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="001">한국은행</SelectItem>
+                          <SelectItem value="002">산업은행</SelectItem>
+                          <SelectItem value="003">기업은행</SelectItem>
+                          <SelectItem value="004">국민은행</SelectItem>
+                          <SelectItem value="007">수협은행</SelectItem>
+                          <SelectItem value="011">농협은행</SelectItem>
+                          <SelectItem value="020">우리은행</SelectItem>
+                          <SelectItem value="023">SC제일은행</SelectItem>
+                          <SelectItem value="027">한국씨티은행</SelectItem>
+                          <SelectItem value="088">신한은행</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* 계좌번호 */}
+                    <div className="space-y-3">
+                      <UILabel className="text-base font-medium">계좌번호</UILabel>
+                      <Input
+                        placeholder="계좌번호를 입력하세요"
+                        value={accountNumber}
+                        onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9-]/g, ""))}
+                      />
+                    </div>
+
+                    {/* 예금주명 */}
+                    <div className="space-y-3">
+                      <UILabel className="text-base font-medium">예금주명</UILabel>
+                      <Input
+                        placeholder="예금주명을 입력하세요"
+                        value={accountHolderName}
+                        onChange={(e) => setAccountHolderName(e.target.value)}
+                      />
+                    </div>
+
+                    {/* 주민등록번호 */}
+                    <div className="space-y-3">
+                      <UILabel className="text-base font-medium">주민등록번호 앞 6자리</UILabel>
+                      <Input
+                        placeholder="주민등록번호 앞 6자리 (예: 123456)"
+                        value={identificationNumber}
+                        onChange={(e) => setIdentificationNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                        maxLength={6}
+                      />
+                    </div>
+
+                    {/* 계좌 비밀번호 */}
+                    <div className="space-y-3">
+                      <UILabel className="text-base font-medium">계좌 비밀번호 앞 2자리</UILabel>
+                      <Input
+                        type="password"
+                        placeholder="계좌 비밀번호 앞 2자리"
+                        value={accountPassword}
+                        onChange={(e) => setAccountPassword(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
+                        maxLength={2}
+                      />
                     </div>
                   </div>
                 </TabsContent>
@@ -584,36 +626,27 @@ export default function PaymentPage() {
             </CardContent>
           </Card>
 
-          {/* Terms and Payment Button */}
+          {/* 약관 동의 및 결제 버튼 */}
           <div className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="terms" 
-                  checked={agreeTerms} 
-                  onCheckedChange={(checked) => setAgreeTerms(checked === true)} 
-                />
-                <UILabel htmlFor="terms" className="text-sm">
-                  스마트티켓 발권(RAIL-O톡 어플 이용 시 체크) <span className="text-red-500">*</span>
-                </UILabel>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="savePayment" 
-                  checked={agreeSavePayment} 
-                  onCheckedChange={(checked) => setAgreeSavePayment(checked === true)} 
-                />
-                <UILabel htmlFor="savePayment" className="text-sm">
-                  결제수단 저장(개인정보 및 카드번호, 비밀번호 등은 저장하지 않습니다)
-                </UILabel>
-              </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="terms" 
+                checked={agreeTerms} 
+                onCheckedChange={(checked) => setAgreeTerms(checked === true)} 
+              />
+              <UILabel htmlFor="terms" className="text-sm">
+                [필수] 승차권 발권 및 이용약관에 동의합니다
+              </UILabel>
             </div>
 
             <div className="text-center">
               <div className="mb-4">
                 <span className="text-lg font-bold">결제하실 금액: </span>
-                <span className="text-xl font-bold text-red-600">{formatPrice(paymentInfo.price)}</span>
+                <span className="text-xl font-bold text-red-600">
+                  {formatPrice(reservationData.fare)}
+                </span>
               </div>
+              
               <Button
                 onClick={handlePayment}
                 disabled={isProcessing || !agreeTerms}
@@ -622,21 +655,17 @@ export default function PaymentPage() {
               >
                 {isProcessing ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     처리중...
                   </>
                 ) : (
-                  "결제/발권"
+                  "결제하기"
                 )}
               </Button>
             </div>
-
-            <div className="text-center text-sm text-gray-500">
-              <p>결제 진행 중 문제가 발생하면 고객센터(1544-7788)로 문의해주세요.</p>
-            </div>
           </div>
 
-          {/* Important Notice */}
+          {/* 주의사항 */}
           <Card className="mt-8 bg-blue-50 border-blue-200">
             <CardContent className="p-6">
               <div className="flex items-start space-x-3">

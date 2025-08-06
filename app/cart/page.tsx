@@ -20,19 +20,28 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  Train,
-  ChevronLeft,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Label as UILabel } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
   ShoppingCart,
   Trash2,
   CreditCard,
   ArrowRight,
   MapPin,
   Clock,
-  AlertTriangle,
 } from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
 import { getCart, deleteReservation } from '@/lib/api/booking'
+import { processPaymentViaCard, processPaymentViaBankAccount } from '@/lib/api/payment'
 import { handleError } from '@/lib/utils/errorHandler'
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
@@ -70,6 +79,25 @@ export default function CartPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<number | null>(null)
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
+
+  // 결제 모달 관련 state
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "account">("card")
+  const [paymentLoading, setPaymentLoading] = useState(false)
+
+  // 카드 결제 정보
+  const [cardNumber, setCardNumber] = useState("")
+  const [validThru, setValidThru] = useState("")
+  const [rrn, setRrn] = useState("")
+  const [cardPassword, setCardPassword] = useState("")
+  const [installment, setInstallment] = useState("0")
+  
+  // 계좌이체 정보
+  const [bankCode, setBankCode] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [accountHolderName, setAccountHolderName] = useState("")
+  const [identificationNumber, setIdentificationNumber] = useState("")
+  const [accountPassword, setAccountPassword] = useState("")
 
   // 장바구니 데이터 로드
   useEffect(() => {
@@ -191,7 +219,115 @@ export default function CartPage() {
       alert("결제할 항목을 선택해주세요.")
       return
     }
-    router.push("/ticket/payment")
+    setShowPaymentDialog(true)
+  }
+
+  const validateCardPayment = () => {
+    if (!cardNumber) {
+      alert("카드번호를 입력해주세요.")
+      return false
+    }
+    if (!validThru) {
+      alert("유효기간을 입력해주세요.")
+      return false
+    }
+    if (!rrn) {
+      alert("주민등록번호를 입력해주세요.")
+      return false
+    }
+    if (!cardPassword) {
+      alert("카드 비밀번호를 입력해주세요.")
+      return false
+    }
+    return true
+  }
+
+  const validateAccountPayment = () => {
+    if (!bankCode) {
+      alert("은행을 선택해주세요.")
+      return false
+    }
+    if (!accountNumber) {
+      alert("계좌번호를 입력해주세요.")
+      return false
+    }
+    if (!accountHolderName) {
+      alert("예금주명을 입력해주세요.")
+      return false
+    }
+    if (!identificationNumber) {
+      alert("주민등록번호 앞 6자리를 입력해주세요.")
+      return false
+    }
+    if (!accountPassword) {
+      alert("계좌 비밀번호를 입력해주세요.")
+      return false
+    }
+    return true
+  }
+
+  const processCartPayment = async () => {
+    const selectedItems = cartItems.filter((item) => item.selected)
+    if (selectedItems.length === 0) {
+      alert("결제할 항목을 선택해주세요.")
+      return
+    }
+
+    setPaymentLoading(true)
+
+    try {
+      // 각 예약에 대해 개별적으로 결제 처리
+      const paymentPromises = selectedItems.map(async (item) => {
+        if (paymentMethod === "card") {
+          if (!validateCardPayment()) return null
+
+          const request = {
+            reservationId: item.reservationId,
+            amount: item.fare,
+            cardNumber: cardNumber.replace(/\s/g, ""),
+            validThru,
+            rrn,
+            installmentMonths: parseInt(installment),
+            cardPassword: parseInt(cardPassword)
+          }
+
+          return await processPaymentViaCard(request)
+        } else if (paymentMethod === "account") {
+          if (!validateAccountPayment()) return null
+
+          const request = {
+            reservationId: item.reservationId,
+            amount: item.fare,
+            bankCode,
+            accountNumber,
+            accountHolderName,
+            identificationNumber,
+            accountPassword
+          }
+
+          return await processPaymentViaBankAccount(request)
+        }
+      })
+
+      const results = await Promise.all(paymentPromises)
+      const successCount = results.filter(r => r !== null).length
+
+      if (successCount > 0) {
+        alert(`${successCount}개 항목의 결제가 완료되었습니다!`)
+        setShowPaymentDialog(false)
+        
+        // 결제 완료된 항목들을 장바구니에서 제거
+        setCartItems((prev) => prev.filter((item) => !item.selected))
+        
+        // 결제 완료 페이지로 이동
+        router.push("/ticket/purchased")
+      }
+    } catch (error) {
+      console.error('Cart payment error:', error)
+      handleError(error, '결제 처리 중 오류가 발생했습니다.', true)
+    } finally {
+      setPaymentLoading(false)
+    }
   }
 
   const selectedItems = cartItems.filter((item) => item.selected)
@@ -516,6 +652,209 @@ export default function CartPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Payment Dialog */}
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>결제 정보</DialogTitle>
+            <DialogDescription>
+              선택된 {selectedItems.length}개 항목을 결제합니다. (총 {formatPrice(totalPrice)})
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Selected Items Summary */}
+            <div>
+              <h3 className="font-semibold mb-3">결제 항목</h3>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {selectedItems.map((item) => (
+                  <div key={item.reservationId} className="flex justify-between text-sm bg-gray-50 p-2 rounded">
+                    <span>{item.trainName} {item.trainNumber} - {item.departureStationName} → {item.arrivalStationName}</span>
+                    <span className="font-medium">{formatPrice(item.fare)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Method Selection */}
+            <div>
+              <h3 className="font-semibold mb-3">결제 방법</h3>
+              <Tabs value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as "card" | "account")}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="card">신용카드</TabsTrigger>
+                  <TabsTrigger value="account">계좌이체</TabsTrigger>
+                </TabsList>
+
+                {/* Card Payment Form */}
+                <TabsContent value="card" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <UILabel className="text-base font-medium">카드번호</UILabel>
+                      <Input
+                        placeholder="1234 5678 9012 3456"
+                        value={cardNumber}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "").replace(/(\d{4})(?=\d)/g, "$1 ")
+                          setCardNumber(value)
+                        }}
+                        maxLength={19}
+                      />
+                    </div>
+
+                    <div>
+                      <UILabel className="text-base font-medium">유효기간</UILabel>
+                      <Input
+                        placeholder="MM/YY"
+                        value={validThru}
+                        onChange={(e) => {
+                          let value = e.target.value.replace(/\D/g, "")
+                          if (value.length >= 2) {
+                            value = value.substring(0, 2) + "/" + value.substring(2, 4)
+                          }
+                          setValidThru(value)
+                        }}
+                        maxLength={5}
+                      />
+                    </div>
+
+                    <div>
+                      <UILabel className="text-base font-medium">주민번호 앞 6자리</UILabel>
+                      <Input
+                        placeholder="951201"
+                        value={rrn}
+                        onChange={(e) => setRrn(e.target.value.replace(/\D/g, ""))}
+                        maxLength={6}
+                      />
+                    </div>
+
+                    <div>
+                      <UILabel className="text-base font-medium">카드 비밀번호 앞 2자리</UILabel>
+                      <Input
+                        type="password"
+                        placeholder="**"
+                        value={cardPassword}
+                        onChange={(e) => setCardPassword(e.target.value.replace(/\D/g, ""))}
+                        maxLength={2}
+                      />
+                    </div>
+
+                    <div>
+                      <UILabel className="text-base font-medium">할부</UILabel>
+                      <Select value={installment} onValueChange={setInstallment}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">일시불</SelectItem>
+                          <SelectItem value="2">2개월</SelectItem>
+                          <SelectItem value="3">3개월</SelectItem>
+                          <SelectItem value="6">6개월</SelectItem>
+                          <SelectItem value="12">12개월</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Account Transfer Form */}
+                <TabsContent value="account" className="space-y-4 mt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <UILabel className="text-base font-medium">은행</UILabel>
+                      <Select value={bankCode} onValueChange={setBankCode}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="은행 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="088">신한은행</SelectItem>
+                          <SelectItem value="020">우리은행</SelectItem>
+                          <SelectItem value="003">기업은행</SelectItem>
+                          <SelectItem value="004">KB국민은행</SelectItem>
+                          <SelectItem value="011">NH농협은행</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <UILabel className="text-base font-medium">계좌번호</UILabel>
+                      <Input
+                        placeholder="123456789012"
+                        value={accountNumber}
+                        onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9-]/g, ""))}
+                      />
+                    </div>
+
+                    <div>
+                      <UILabel className="text-base font-medium">예금주명</UILabel>
+                      <Input
+                        placeholder="예금주명을 입력하세요"
+                        value={accountHolderName}
+                        onChange={(e) => setAccountHolderName(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <UILabel className="text-base font-medium">주민등록번호 앞 6자리</UILabel>
+                      <Input
+                        placeholder="주민등록번호 앞 6자리 (예: 123456)"
+                        value={identificationNumber}
+                        onChange={(e) => setIdentificationNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                        maxLength={6}
+                      />
+                    </div>
+
+                    <div className="col-span-2">
+                      <UILabel className="text-base font-medium">계좌 비밀번호 앞 2자리</UILabel>
+                      <Input
+                        type="password"
+                        placeholder="계좌 비밀번호 앞 2자리"
+                        value={accountPassword}
+                        onChange={(e) => setAccountPassword(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
+                        maxLength={2}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* Payment Summary */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex justify-between text-lg font-bold">
+                <span>총 결제금액</span>
+                <span className="text-blue-600">{formatPrice(totalPrice)}</span>
+              </div>
+            </div>
+
+            {/* Payment Buttons */}
+            <div className="flex space-x-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowPaymentDialog(false)}
+                className="flex-1"
+                disabled={paymentLoading}
+              >
+                취소
+              </Button>
+              <Button
+                onClick={processCartPayment}
+                disabled={paymentLoading || selectedItems.length === 0}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                {paymentLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    결제 처리중...
+                  </>
+                ) : (
+                  `${formatPrice(totalPrice)} 결제하기`
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>

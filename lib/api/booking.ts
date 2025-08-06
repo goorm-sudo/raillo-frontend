@@ -113,9 +113,14 @@ export const getReservationList = async () => {
   return api.get<ReservationDetailResponse[]>("/api/v1/booking/reservation")
 }
 
+// 단일 예약 조회 함수
+export const getReservation = async (reservationId: number) => {
+  return api.get<ReservationDetailResponse>(`/api/v1/booking/reservation/${reservationId}`)
+}
+
 // 승차권 조회 함수
 export const getTickets = async () => {
-  return api.get<TicketResponse>("/booking/ticket")
+  return api.get<TicketResponse>("/api/v1/booking/ticket")
 }
 
  

@@ -9,7 +9,6 @@ import {
   ChevronDown,
   CreditCard,
   Settings,
-  ShoppingCart,
   Star,
   Ticket,
   Train,
@@ -108,15 +107,12 @@ export default function MyPageSidebar({ memberInfo }: MyPageSidebarProps) {
                 >
                   <span>예약승차권 조회/취소</span>
                 </Link>
-                <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
+                <Link
+                  href="/ticket/history"
+                  className="flex items-center space-x-3 px-8 py-2 text-sm text-gray-600 hover:text-blue-600"
+                >
                   <span>승차권 구입이력</span>
-                </div>
-                <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
-                  <span>이용내역/영수증조회</span>
-                </div>
-                <div className="px-8 py-2 text-sm text-gray-600 hover:text-blue-600 cursor-pointer">
-                  <span>취소/반환 수수료</span>
-                </div>
+                </Link>
               </CollapsibleContent>
             </Collapsible>
 

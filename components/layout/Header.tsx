@@ -4,7 +4,20 @@ import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Train, ShoppingCart, User, LogIn, Menu, X, CreditCard, Ticket, CalendarIcon, Search, RotateCcw, ChevronRight, LogOut, Lock, Phone, MapPin } from "lucide-react"
+import {
+  Train,
+  ShoppingCart,
+  User,
+  LogIn,
+  Menu,
+  X,
+  CreditCard,
+  Ticket,
+  Search,
+  ChevronRight,
+  LogOut,
+  MapPin
+} from "lucide-react";
 import { tokenManager } from "@/lib/auth"
 import { logout } from "@/lib/api/auth"
 
@@ -243,14 +256,6 @@ export default function Header() {
                   >
                     <Search className="h-5 w-5 text-orange-600" />
                     <span className="text-gray-700">예약 승차권 조회</span>
-                  </Link>
-                  <Link 
-                    href="/ticket/reservations" 
-                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors bg-white"
-                    onClick={() => setShowSidebar(false)}
-                  >
-                    <RotateCcw className="h-5 w-5 text-red-600" />
-                    <span className="text-gray-700">승차권 반환</span>
                   </Link>
                 </div>
 

@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -20,8 +19,6 @@ import {
 import { format, addMinutes } from "date-fns"
 import { ko } from "date-fns/locale"
 import {
-  Train,
-  ChevronLeft,
   Clock,
   MapPin,
   ArrowRight,
@@ -180,7 +177,11 @@ export default function ReservationPage() {
   }
 
   const handlePayment = () => {
-    router.push("/ticket/payment")
+    if (reservation) {
+      // 예약 ID를 세션 스토리지에 저장하고 결제 페이지로 이동
+      sessionStorage.setItem('tempReservationId', reservation.reservationId.toString())
+      router.push("/ticket/payment")
+    }
   }
 
   const getTrainTypeColor = (trainName: string) => {

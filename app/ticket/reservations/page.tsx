@@ -5,21 +5,14 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Search, Train, MapPin, Clock, User, ArrowRight, ChevronLeft, X, AlertTriangle, Info, CreditCard } from "lucide-react"
+import { MapPin, Clock, ArrowRight, X, AlertTriangle, Info, CreditCard, ShoppingCart } from "lucide-react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { cn } from "@/lib/utils"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
-import { getReservationList, deleteReservation, ReservationDetailResponse } from '@/lib/api/booking'
+import { getReservationList, deleteReservation, addToCart, ReservationDetailResponse } from '@/lib/api/booking'
 import { handleError } from '@/lib/utils/errorHandler'
 import {
   AlertDialog,
@@ -42,12 +35,13 @@ export default function ReservationsPage() {
   const [reservations, setReservations] = useState<ReservationDetailResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [cartLoading, setCartLoading] = useState<{ [key: number]: boolean }>({})
 
   // 예약 목록 조회
   useEffect(() => {
     // 로그인 상태가 확인된 후에만 예약 목록을 조회
     if (isChecking || !isAuthenticated) return
-    
+
     const fetchReservations = async () => {
       try {
         setLoading(true)
@@ -139,6 +133,32 @@ export default function ReservationsPage() {
     router.push("/ticket/payment")
   }
 
+  const handleAddToCart = async (reservationId: number) => {
+    try {
+      // 특정 예약의 로딩 상태 설정
+      setCartLoading(prev => ({ ...prev, [reservationId]: true }))
+
+      await addToCart({ reservationId })
+
+      const goToCart = confirm("장바구니에 추가되었습니다.\n장바구니로 이동하시겠습니까?")
+      if (goToCart) {
+        router.push("/cart")
+        return
+      }
+
+      // 예약 목록 다시 조회하여 상태 업데이트
+      const response = await getReservationList()
+      if (response.result) {
+        setReservations(response.result)
+      }
+    } catch (err) {
+      handleError(err, '장바구니 추가 중 오류가 발생했습니다.', true)
+    } finally {
+      // 로딩 상태 해제
+      setCartLoading(prev => ({ ...prev, [reservationId]: false }))
+    }
+  }
+
   // 로그인 상태 확인 중이거나 인증되지 않은 경우 로딩 표시
   if (isChecking || !isAuthenticated) {
     return (
@@ -194,8 +214,19 @@ export default function ReservationsPage() {
         <div className="max-w-4xl mx-auto">
           {/* Page Title */}
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">예약승차권 조회</h2>
-            <p className="text-gray-600">예약한 승차권을 확인하고 결제하거나 취소할 수 있습니다</p>
+            <div className="flex items-center justify-between mb-4">
+              <div></div>
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">예약승차권 조회</h2>
+                <p className="text-gray-600">예약한 승차권을 확인하고 결제하거나 취소할 수 있습니다</p>
+              </div>
+              <Link href="/cart">
+                <Button variant="outline" size="sm" className="text-green-600 border-green-600 hover:bg-green-50">
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  장바구니
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Notice */}
@@ -214,7 +245,7 @@ export default function ReservationsPage() {
 
             {(() => {
               const validReservations = reservations.filter(reservation => !isExpired(reservation.expiresAt))
-              
+
               if (reservations.length === 0) {
                 return (
                   <Card>
@@ -229,7 +260,7 @@ export default function ReservationsPage() {
                   </Card>
                 )
               }
-              
+
               if (validReservations.length === 0) {
                 return (
                   <Card>
@@ -244,7 +275,7 @@ export default function ReservationsPage() {
                   </Card>
                 )
               }
-              
+
               return validReservations.map((reservation) => (
                 <Card
                   key={reservation.reservationId}
@@ -318,6 +349,25 @@ export default function ReservationsPage() {
                       >
                         <X className="h-4 w-4 mr-1" />
                         예약취소
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAddToCart(reservation.reservationId)}
+                        disabled={cartLoading[reservation.reservationId]}
+                        className="text-green-600 border-green-600 hover:bg-green-50"
+                      >
+                        {cartLoading[reservation.reservationId] ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-1"></div>
+                            추가중...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="h-4 w-4 mr-1" />
+                            장바구니
+                          </>
+                        )}
                       </Button>
                       <Button
                         size="sm"
