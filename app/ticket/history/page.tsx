@@ -14,7 +14,7 @@ import { ko } from "date-fns/locale"
 import { CreditCard, Calendar, Clock, AlertCircle, CheckCircle, XCircle} from "lucide-react"
 import Header from "@/components/layout/Header"
 import Footer from "@/components/layout/Footer"
-import { getPaymentHistory } from '@/lib/api/payment'
+import { getPaymentHistory, cancelPayment } from '@/lib/api/payment'
 import { handleError } from '@/lib/utils/errorHandler'
 
 interface PaymentHistory {
@@ -141,17 +141,19 @@ export default function PaymentHistoryPage() {
     }
   })
 
-  const handleCancelPayment = async () => {
+  const handleCancelPayment = async (paymentKey: string) => {
     if (!confirm("결제를 취소하시겠습니까?\n취소된 결제는 복구할 수 없습니다.")) return
     
     try {
+      await cancelPayment(paymentKey)
       alert(`결제가 취소되었습니다.`)
 
       // 결제 내역 다시 조회
       const data = await getPaymentHistory()
       setPaymentHistory(data ?? [])
     } catch (err) {
-      console.error('Cancel payment error:', err)
+      const errorMessage = handleError(err, '결제 취소 중 오류가 발생했습니다.', false)
+      alert(errorMessage)
     }
   }
 
@@ -307,7 +309,7 @@ export default function PaymentHistoryPage() {
                           </div>
                           {payment.paymentStatus === "PAID" && (
                             <Button
-                              onClick={() => handleCancelPayment()}
+                              onClick={() => handleCancelPayment(payment.paymentKey)}
                               variant="outline"
                               size="sm"
                               className="text-red-600 border-red-300 hover:bg-red-50"
