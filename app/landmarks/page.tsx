@@ -339,7 +339,7 @@ export default function LandmarksPage() {
                       setSelectedStation(value)
                     }}
                     placeholder="역을 선택하세요"
-                    label="역 선택"
+                    label="역"
                     hideHistory={true}
                   />
                 </div>
